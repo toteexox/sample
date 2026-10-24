@@ -676,6 +676,76 @@
         </div>
     </div>
 
+
+
+    <!-- [9] 관리자 전용 회원 관리 모달 -->
+    <div class="modal-overlay" id="admin-modal">
+        <div class="edit-modal" style="width: 95%; max-width: 500px; text-align:left;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h3 style="margin:0; font-size:18px; color:#1e293b;">👑 관리자 회원 관리</h3>
+                <button onclick="closeAdminModal()" style="background: none; border: none; font-size: 20px; cursor: pointer; color:#868e96;"><i class="fas fa-times"></i></button>
+            </div>
+            
+            <!-- 새 회원 추가 섹션 -->
+            <div style="background:#f8f9fa; padding:16px; border-radius:12px; margin-bottom:16px; border:1px solid #e9ecef; display:flex; flex-direction:column; gap:10px;">
+                <div style="font-weight:800; font-size:14px; color:#1e293b;">➕ 새 회원 아이디 생성</div>
+                <input type="text" id="new-user-id" class="login-input" placeholder="아이디 (예: Koham)" style="padding:12px; font-size:14px;">
+                <input type="password" id="new-user-pw" class="login-input" placeholder="초기 비밀번호 (6자리 이상)" style="padding:12px; font-size:14px;">
+                <button style="width:100%; padding:12px; background:#2b8a3e; color:white; border:none; border-radius:10px; font-weight:800; cursor:pointer; font-size:15px;" onclick="adminCreateUser()">회원 생성하기</button>
+                <div id="admin-create-error" style="color:#fa5252; font-size:12px; margin-top:2px;"></div>
+            </div>
+
+            <!-- 등록된 회원 목록 및 관리 -->
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <div style="font-weight:800; font-size:14px; color:#1e293b;">👥 회원 목록 및 관리</div>
+                <!-- 💡 [수정] onclick 함수를 선택 모달 호출로 변경 -->
+                <button style="padding:6px 10px; background:#e03131; color:white; border:none; border-radius:8px; font-weight:800; font-size:12px; cursor:pointer;" onclick="openAdminResetModal('ALL_USERS')">
+                    🔄 전체 초기화
+                </button>
+            </div>
+            <div id="admin-user-list" style="max-height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
+                <!-- 자바스크립트로 동적 생성됨 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- [10] 관리자 전용 데이터 선택 초기화 모달 -->
+    <div class="modal-overlay" id="admin-reset-modal">
+        <div class="edit-modal" style="width: 90%; max-width: 320px; text-align:left;">
+            <h3 style="margin-bottom:14px; font-size:18px; color:#1e293b;">🔄 데이터 선택 초기화</h3>
+            <p style="font-size:13px; color:#64748b; margin-bottom:16px;">초기화할 항목을 선택해주세요. (복수 선택 가능)</p>
+
+            <div style="display:flex; flex-direction:column; gap:12px; margin-bottom:24px;">
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                    <input type="checkbox" id="reset-opt-mission" style="width:18px; height:18px;" checked>
+                    <span style="font-size:14px; font-weight:700; color:#495057;">🔥 미션 현황</span>
+                </label>
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                    <input type="checkbox" id="reset-opt-stats" style="width:18px; height:18px;">
+                    <span style="font-size:14px; font-weight:700; color:#495057;">📊 성취도</span>
+                </label>
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                    <input type="checkbox" id="reset-opt-jubs" style="width:18px; height:18px;">
+                    <span style="font-size:14px; font-weight:700; color:#495057;">🧺 줍줍 문장</span>
+                </label>
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                    <input type="checkbox" id="reset-opt-memos" style="width:18px; height:18px;">
+                    <span style="font-size:14px; font-weight:700; color:#495057;">📝 상황 메모</span>
+                </label>
+            </div>
+
+            <!-- 💡 [수정] 이 부분에 class="modal-btns"를 적용하여 디자인을 복구했습니다. -->
+            <div class="modal-btns">
+                <button class="btn-cancel" onclick="closeAdminResetModal()">취소</button>
+                <button class="btn-add-new" style="background:#f59f00;" onclick="executeAdminReset()">초기화 실행</button>
+            </div>
+        </div>
+    </div>
+
+
+
+
+
     <!-- =========================================================
          4. 숨김 오디오 요소 및 스크립트 연결
          ========================================================= -->
@@ -864,8 +934,8 @@
             }
         }
 
-        // =========================================================================
-        // 👑 3. 관리자 전용 제어 (회원 추가 / 초기화 / 삭제)
+     // =========================================================================
+        // 👑 3. 관리자 전용 제어 (회원 추가 / 선택 초기화 / 삭제)
         // =========================================================================
         async function openAdminModal() {
             if (!isAdmin) return alert("관리자만 접근할 수 있습니다.");
@@ -923,6 +993,7 @@
                     const data = doc.data();
                     
                     let displayName = data.userId || (data.email ? data.email.split('@')[0] : (uid === currentUserUid ? "Raina" : `사용자 (${uid.substring(0, 6)})`));
+                    
                     let lastLoginStr = "기록 없음";
                     if (data.lastLoginAt) {
                         let d = new Date(data.lastLoginAt);
@@ -958,9 +1029,9 @@
                     }
                     
                     let item = document.createElement('div');
-                    item.style.cssText = "background:#f1f3f5; padding:14px 16px; border-radius:12px; display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;";
+                    item.style.cssText = "background:#f1f3f5; padding:14px; border-radius:12px; display:flex; flex-direction:column; gap:10px; margin-bottom:10px;";
                     item.innerHTML = `
-                        <div style="flex:1; padding-right:10px;">
+                        <div>
                             <div style="font-weight:800; font-size:16px; color:#1e293b; display:flex; align-items:center; gap:6px;">
                                 <i class="fas fa-user-circle" style="color:#339af0; font-size:18px;"></i> ${displayName}
                                 <span style="font-size:11px; background:#e2e8f0; color:#475569; padding:2px 6px; border-radius:6px; font-weight:600;">최근 로그인: ${lastLoginStr}</span>
@@ -971,9 +1042,9 @@
                                 <span style="color:${totalPenalties > 0 ? '#e03131' : '#2b8a3e'};">⚠️ 누적 패널티: <b>${totalPenalties}회</b></span>
                             </div>
                         </div>
-                        <div style="display:flex; gap:6px; flex-shrink:0;">
-                            <button style="padding:8px 12px; background:#f59f00; color:white; border:none; border-radius:8px; font-weight:700; font-size:13px; cursor:pointer;" onclick="adminResetUser('${uid}')">초기화</button>
-                            <button style="padding:8px 12px; background:#fa5252; color:white; border:none; border-radius:8px; font-weight:700; font-size:13px; cursor:pointer;" onclick="adminDeleteUser('${uid}')">삭제</button>
+                        <div style="display:flex; gap:6px; justify-content:flex-end;">
+                            <button style="padding:8px 10px; background:#f59f00; color:white; border:none; border-radius:8px; font-weight:700; font-size:12px; cursor:pointer;" onclick="openAdminResetModal('${uid}')">선택초기화</button>
+                            <button style="padding:8px 10px; background:#fa5252; color:white; border:none; border-radius:8px; font-weight:700; font-size:12px; cursor:pointer;" onclick="adminDeleteUser('${uid}')">삭제</button>
                         </div>
                     `;
                     listContainer.appendChild(item);
@@ -981,54 +1052,122 @@
             } catch (err) { listContainer.innerHTML = '<div style="text-align:center; color:#fa5252; padding:20px;">오류가 발생했습니다.</div>'; }
         }
 
-        async function adminResetUser(uid) {
-            if(!confirm("해당 회원의 '미션 인증 기록'을 모두 초기화하시겠습니까?")) return;
-            try {
-                const docRef = db.collection("studyUsers").doc(uid);
-                const docSnap = await docRef.get({ source: 'server' }).catch(() => docRef.get());
+        // =========================================================================
+        // 🔄 데이터 선택 초기화 제어 (개별 & 전체 회원 통합)
+        // =========================================================================
+        let targetResetUid = null;
+        
+        function openAdminResetModal(uid) {
+            targetResetUid = uid;
+            document.getElementById('reset-opt-mission').checked = true;
+            document.getElementById('reset-opt-stats').checked = false;
+            document.getElementById('reset-opt-jubs').checked = false;
+            document.getElementById('reset-opt-memos').checked = false;
+            
+            // 전체 초기화인지 개별 초기화인지에 따라 팝업창 제목 변경
+            const titleEl = document.querySelector('#admin-reset-modal h3');
+            if (uid === 'ALL_USERS') {
+                titleEl.innerHTML = '⚠️ <span style="color:#e03131;">전체 회원</span> 데이터 초기화';
+            } else {
+                titleEl.innerHTML = '🔄 특정 회원 데이터 초기화';
+            }
+
+            document.getElementById('admin-reset-modal').classList.add('active');
+        }
+        
+        function closeAdminResetModal() {
+            targetResetUid = null;
+            document.getElementById('admin-reset-modal').classList.remove('active');
+        }
+
+        async function executeAdminReset() {
+            if (!targetResetUid) return;
+            const optMission = document.getElementById('reset-opt-mission').checked;
+            const optStats = document.getElementById('reset-opt-stats').checked;
+            const optJubs = document.getElementById('reset-opt-jubs').checked;
+            const optMemos = document.getElementById('reset-opt-memos').checked;
+
+            if (!optMission && !optStats && !optJubs && !optMemos) return alert("초기화할 항목을 1개 이상 선택해주세요.");
+            
+            const isAll = targetResetUid === 'ALL_USERS';
+            const confirmMsg = isAll 
+                ? "⚠️ 정말 [모든 회원]의 선택 항목을 일괄 초기화하시겠습니까?\n(이 작업은 절대 되돌릴 수 없습니다!)"
+                : "선택한 항목들을 정말 초기화하시겠습니까?\n(이 작업은 되돌릴 수 없습니다.)";
                 
-                if (docSnap.exists) {
-                    let data = docSnap.data();
-                    let updatePayload = { completedTasks: {} };
-                    Object.keys(data).forEach(key => {
-                        if (key.startsWith('progress_')) updatePayload[key] = firebase.firestore.FieldValue.delete();
+            if (!confirm(confirmMsg)) return;
+
+            const saveBtn = document.querySelector('#admin-reset-modal .btn-add-new');
+            const origText = saveBtn.innerText;
+            saveBtn.innerText = "초기화 진행 중...";
+            saveBtn.disabled = true;
+
+            try {
+                if (isAll) {
+                    // 1) 전체 회원 일괄 초기화
+                    const snapshot = await db.collection("studyUsers").get({ source: 'server' }).catch(() => db.collection("studyUsers").get());
+                    const batch = db.batch();
+                    
+                    snapshot.forEach(doc => {
+                        let data = doc.data();
+                        let updatePayload = {};
+                        if (optMission) {
+                            updatePayload.completedTasks = {};
+                            Object.keys(data).forEach(key => { if (key.startsWith('progress_')) updatePayload[key] = firebase.firestore.FieldValue.delete(); });
+                        }
+                        if (optStats) updatePayload.cardStats = {};
+                        if (optJubs) updatePayload.jubs = [];
+                        if (optMemos) updatePayload.cardMemos = {};
+                        batch.update(doc.ref, updatePayload);
                     });
-                    await docRef.update(updatePayload);
+                    await batch.commit();
+                    
+                } else {
+                    // 2) 개별 회원 초기화
+                    const docRef = db.collection("studyUsers").doc(targetResetUid);
+                    const docSnap = await docRef.get({ source: 'server' }).catch(() => docRef.get());
+                    
+                    if (docSnap.exists) {
+                        let data = docSnap.data();
+                        let updatePayload = {};
+
+                        if (optMission) {
+                            updatePayload.completedTasks = {};
+                            Object.keys(data).forEach(key => { if (key.startsWith('progress_')) updatePayload[key] = firebase.firestore.FieldValue.delete(); });
+                        }
+                        if (optStats) updatePayload.cardStats = {};
+                        if (optJubs) updatePayload.jubs = [];
+                        if (optMemos) updatePayload.cardMemos = {};
+
+                        await docRef.update(updatePayload);
+                    }
                 }
-                if (uid === currentUserUid) {
-                    Object.keys(userDB).forEach(key => { if (key.startsWith('progress_')) delete userDB[key]; });
-                    userDB.completedTasks = {};
+
+                // 현재 로그인 중인 관리자 본인의 로컬 캐시도 함께 정리 (즉시 뷰 갱신용)
+                if (isAll || targetResetUid === currentUserUid) {
+                    if (optMission) {
+                        Object.keys(userDB).forEach(key => { if (key.startsWith('progress_')) delete userDB[key]; });
+                        userDB.completedTasks = {};
+                    }
+                    if (optStats) userDB.cardStats = {};
+                    if (optJubs) userDB.jubs = [];
+                    if (optMemos) userDB.cardMemos = {};
+                    
                     localStorage.setItem('stackup_cache_' + currentUserUid, JSON.stringify(userDB));
                     updateDateDisplay(); 
                 }
-                alert("초기화가 완료되었습니다.");
-                renderAdminUserList();
-            } catch (err) { alert("오류: " + err.message); }
-        }
 
-        async function adminResetAllMissions() {
-            if(!isAdmin) return;
-            if(!confirm("⚠️ 정말 [모든 회원]의 미션 인증 및 이어하기 기록을 일괄 초기화하시겠습니까?")) return;
-            try {
-                const snapshot = await db.collection("studyUsers").get({ source: 'server' }).catch(() => db.collection("studyUsers").get());
-                const batch = db.batch();
-                snapshot.forEach(doc => {
-                    let data = doc.data();
-                    let updatePayload = { completedTasks: {} };
-                    Object.keys(data).forEach(key => {
-                        if (key.startsWith('progress_')) updatePayload[key] = firebase.firestore.FieldValue.delete();
-                    });
-                    batch.update(doc.ref, updatePayload);
-                });
-                await batch.commit();
-
-                Object.keys(userDB).forEach(key => { if (key.startsWith('progress_')) delete userDB[key]; });
-                userDB.completedTasks = {};
-                localStorage.setItem('stackup_cache_' + currentUserUid, JSON.stringify(userDB));
-                updateDateDisplay();
-                alert("🎉 모든 회원의 미션 기록이 초기화되었습니다!");
+                saveBtn.innerText = origText;
+                saveBtn.disabled = false;
+                alert(isAll ? "🎉 모든 회원의 선택한 항목이 초기화되었습니다!" : "선택한 항목이 깔끔하게 초기화되었습니다.");
+                
+                closeAdminResetModal();
                 renderAdminUserList();
-            } catch (err) { alert("오류: " + err.message); }
+
+            } catch (err) { 
+                saveBtn.innerText = origText;
+                saveBtn.disabled = false;
+                alert("초기화 중 오류가 발생했습니다: " + err.message); 
+            }
         }
 
         async function adminDeleteUser(uid) {
