@@ -1707,11 +1707,35 @@
             const optMemo = wrapper.querySelector('.opt-memo');
 
             if (isTuktakMemoMode) {
-                wrapper.classList.add('memo-mode'); optScript.classList.remove('active'); optMemo.classList.add('active');
+                // 메모 모드 켜짐 (슬라이더 우측)
+                wrapper.classList.add('memo-mode'); 
+                optScript.classList.remove('active'); 
+                optMemo.classList.add('active');
             } else {
-                wrapper.classList.remove('memo-mode'); optMemo.classList.remove('active'); optScript.classList.add('active');
+                // 스크립트 모드 켜짐 (슬라이더 좌측)
+                wrapper.classList.remove('memo-mode'); 
+                optMemo.classList.remove('active'); 
+                optScript.classList.add('active');
             }
-            showCard();
+            
+            // 💡 [핵심 해결] showCard()로 전체를 덮어쓰지 않고, 한글 부분만 즉시 교체합니다!
+            const card = currentDeck[currentCardIndex];
+            if (!card) return;
+            
+            const korEl = document.getElementById('tuktak-kor');
+            
+            if (isTuktakMemoMode) {
+                const memoKey = card.ch + "_" + card.originalEng;
+                const savedMemo = userDB.cardMemos && userDB.cardMemos[memoKey] ? userDB.cardMemos[memoKey] : "";
+                
+                if (savedMemo) {
+                    korEl.innerHTML = `<span style="color:#495057; font-size:19px; font-weight:700; line-height:1.45; display:block; text-align:center;">${savedMemo}</span>`;
+                } else {
+                    korEl.innerText = card.kor;
+                }
+            } else {
+                korEl.innerText = card.kor;
+            }
         }
 
         function launchTuktakView() {
@@ -1984,7 +2008,10 @@
                 
                 mediaRecorder.onstop = () => {
                   let mimeType = mediaRecorder.mimeType;
-                  if (!mimeType && audioChunks[0]) mimeType = audioChunks[0].type;
+                  if (!mimeType && audioChunks.length > 0) mimeType = audioChunks[0].type;
+                  
+                  // 💡 [핵심 해결 1] 아이폰 사파리가 확장자를 누락할 경우를 대비한 안전망 추가
+                  if (!mimeType) mimeType = 'audio/mp4'; 
                   
                   const audioBlob = new Blob(audioChunks, { type: mimeType }); 
                   if (userAudioUrl) URL.revokeObjectURL(userAudioUrl);
@@ -1992,6 +2019,13 @@
 
                   const player = document.getElementById('user-audio-player');
                   player.volume = 1.0; player.src = userAudioUrl; player.load();
+
+                  // 💡 [핵심 해결 2] 녹음 파일(Blob) 변환이 완벽히 끝난 후 안전하게 마이크 종료!
+                  // 기존처럼 stop() 직후에 바로 마이크를 꺼버리면 마지막 음성이 잘리거나 파일이 손상됩니다.
+                  if (globalAudioStream) { 
+                      globalAudioStream.getTracks().forEach(t => t.stop()); 
+                      globalAudioStream = null; 
+                  }
 
                   if (!isAutoPlayActive) {
                       const card = currentDeck[currentCardIndex];
@@ -2006,19 +2040,21 @@
                 }, 150);
             } catch (err) {
                 btn.disabled = false; btn.innerHTML = '🎤 녹음 시작하기'; btn.style.background = '#5ba4ff';
-                alert("마이크 접근 권한이 필요합니다. 기기 설정에서 마이크를 허용해 주세요!");
+                alert("마이크 접근 권한이 필요합니다. 브라우저 설정에서 마이크를 허용해 주세요!");
             }
         }
+
 
         function stopRecording() {
             if(mediaRecorder && mediaRecorder.state !== 'inactive') {
                 const btn = document.getElementById('btn-speak-record');
                 btn.innerHTML = '⏳ 녹음 저장 중...'; btn.disabled = true;
+                
                 setTimeout(() => {
+                    // 녹음 중지 명령만 내리고, 실제 마이크 전원 끄기는 onstop 이벤트 내부로 위임합니다.
                     mediaRecorder.stop();
-                    if (globalAudioStream) { globalAudioStream.getTracks().forEach(t => t.stop()); globalAudioStream = null; }
                     btn.disabled = false;
-                }, 200);
+                }, 300); // 💡 마지막 끝말이 잘리지 않도록 저장 대기 시간을 300ms로 조금 늘렸습니다.
             }
         }
 
