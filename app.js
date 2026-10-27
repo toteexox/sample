@@ -1453,6 +1453,32 @@
                 el.classList.toggle('chosen', !!selected);
             });
         }
+        // 첫 녹음 시에만 생기는 iOS 오디오 입력 초기화 지연을 줄이기 위한 사전 준비.
+        // 테스트 음원은 저장하거나 재생하지 않고, 마이크 스트림만 이어서 재사용한다.
+        async function primeRecordingInput(stream) {
+            if (!stream?.active || !window.MediaRecorder) return;
+            const track = stream.getAudioTracks()[0];
+            if (!track || track.readyState !== 'live') return;
+            const warmup = new MediaRecorder(stream);
+            await new Promise(resolve => {
+                let done = false;
+                const finish = () => { if (done) return; done = true; clearTimeout(safety); resolve(); };
+                const safety = setTimeout(() => {
+                    if (warmup.state === 'recording') { try { warmup.stop(); } catch (_) {} }
+                    finish();
+                }, 2400);
+                warmup.ondataavailable = () => {};
+                warmup.onstop = finish;
+                warmup.onerror = () => { diag('입력 예열 오류'); finish(); };
+                warmup.onstart = () => {
+                    diag('입력 예열 시작', `track=${track.readyState}`, `muted=${track.muted}`);
+                    setTimeout(() => { if (warmup.state === 'recording') { try { warmup.stop(); } catch (_) {} } }, 750);
+                };
+                try { warmup.start(); } catch (err) { diag('입력 예열 건너뜀', err.name || 'Error'); finish(); }
+            });
+            diag('입력 예열 완료', `track=${track.readyState}`, `muted=${track.muted}`);
+        }
+
         async function toggleStackupMic() {
             if (recordingBusy || recorderFinalizing || (mediaRecorder && mediaRecorder.state === 'recording')) return;
             stackupMicEnabled = !stackupMicEnabled;
@@ -1467,6 +1493,7 @@
                         globalAudioStream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
                     }
                     diag('마이크 미리 준비 완료', `active=${globalAudioStream.active}`, globalAudioStream.getAudioTracks().map(t => `state=${t.readyState},muted=${t.muted},enabled=${t.enabled}`).join(' / '));
+                    await primeRecordingInput(globalAudioStream);
                     if (!stackupMicEnabled) closeActiveRecordingStream();
                 } catch (err) {
                     stackupMicEnabled = false;
@@ -1807,7 +1834,8 @@
                     const recordingMime = blob.type;
                     diag("녹음 이벤트 onstop", `bytes=${recordingBytes}`, `mime=${recordingMime}`, `chunks=${chunks.length}`, `recorderState=${recorder.state}`);
                     console.info('[StackUp 녹음 완료]', { bytes:recordingBytes, mime:recordingMime, chunks:chunks.length });
-                    closeActiveRecordingStream();
+                    // M5: ON 상태에서는 연결 유지. 다음 녹음 때 입력 경로 초기화를 반복하지 않음.
+                    if (!stackupMicEnabled) closeActiveRecordingStream();
                     if (sessionId !== recordingSessionId) {
                         recordingBusy = false; recorderFinalizing = false;
                         return;
@@ -2000,10 +2028,25 @@
         // =========================================================================
         // 9. 오디오 제어 (원어민 / TTS / 단일 카드)
         // =========================================================================
+        // M5: 원음원이 없는 일반 원문에만 대체 TTS 제공. 변형문장에는 재생하지 않음.
+        function playFallbackTTS(text) {
+            const card = currentDeck[currentCardIndex];
+            if (card && (card.eng || '').trim() !== (card.originalEng || card.eng || '').trim()) {
+                diag('변형문장 TTS 생략', `route=${currentTaskId ? 'mission' : 'burning'}`);
+                return;
+            }
+            if (!text || !('speechSynthesis' in window)) return;
+            window.speechSynthesis.cancel();
+            const utter = new SpeechSynthesisUtterance(text);
+            utter.lang = 'en-US';
+            utter.rate = Math.max(0.5, Math.min(2, currentAudioSpeed || 1));
+            window.speechSynthesis.speak(utter);
+        }
+
         function playNativeAudio(e) {
             if(e) e.stopPropagation(); stopNativeAudio(); const card = currentDeck[currentCardIndex]; if (!card) return;
             const cleanEng = (card.eng || "").replace(/\s+/g, " ").trim(); const cleanOrig = (card.originalEng || "").replace(/\s+/g, " ").trim();
-            if (cleanEng !== cleanOrig) { playFallbackTTS(card.eng); return; }
+            if (cleanEng !== cleanOrig) { diag('변형문장: 원어민 음원/TTS 미재생'); return; }
             if (card.audio && card.end > card.start) {
                 const player = document.getElementById('native-audio-player');
                 const startPlay = () => {
@@ -2019,6 +2062,7 @@
         function playChunk(idx, e) {
             if(e) e.stopPropagation(); stopNativeAudio(); const card = currentDeck[currentCardIndex]; if (!card || !card.chunks || !card.chunks[idx]) return;
             const chunk = card.chunks[idx];
+            if ((card.eng || '').trim() !== (card.originalEng || card.eng || '').trim()) return;
             if (card.audio && chunk.e > chunk.s) {
                 const player = document.getElementById('native-audio-player');
                 const startChunkPlay = () => {
@@ -2049,6 +2093,7 @@
             Array.from(items).forEach(el => { el.style.border = "1px solid #e9ecef"; el.style.boxShadow = "none"; });
             if (items[index]) { items[index].style.border = "2px solid #4dabf7"; items[index].style.boxShadow = "0 4px 12px rgba(77,171,247,0.2)"; }
             const isModified = (card.originalEng && card.originalEng !== card.eng);
+            if (currentListType === 'basket' && isModified) { diag('줍줍 변형문장 TTS 생략'); return; }
             if (card.audio && card.end > card.start) {
                 const player = document.getElementById('native-audio-player'); if (!player.src.endsWith(encodeURI(card.audio))) player.src = card.audio;
                 player.playbackRate = currentAudioSpeed; player.currentTime = card.start; const durationMs = ((card.end - card.start) * 1000) / currentAudioSpeed;

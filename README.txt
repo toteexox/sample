@@ -1,7 +1,8 @@
-Stack Up 첫 녹음 안정화 M4
+Stack Up M5: 녹음 첫 사용 안정화 및 줍줍 변형문장 TTS 제거
 
-GitHub sample 저장소의 index.html, app.js, style.css 3개 파일만 덮어쓰세요. data.js 등은 그대로 유지하세요.
+GitHub sample 저장소의 index.html / app.js / style.css 파일만 교체합니다.
+data.js, ipa-dictionary.js, manifest.json, audio/ 폴더는 변경하지 마세요.
 
-녹음 엔진 MediaRecorder / Blob / FileReader 유지. 녹음 버튼은 onstart 후 약 350ms 안정화 안내가 끝날 때 활성화됩니다. 첫 녹음이 실제로 무음인지 확인하려면 발화 준비 안내와 저장된 바이트 크기를 로그에서 확인해 주세요.
+변경: 마이크 ON 후 약 0.75초 사전 예열(음원 저장 안 함), 스트림 재사용, 첫 녹음 진단 로그, 변형문장 TTS/원문 음원 차단, playFallbackTTS 미정의 오류 해결, 녹음 중지 빨강 및 재생 중지 진초록.
 
-기기 실측은 아직 완료되지 않았습니다.
+주의: iPhone 홈화면 웹앱 실기기 검증 전입니다. 마이크 ON 시 입력 예열 때문에 최초 버튼 반응이 약간 늦을 수 있습니다.
