@@ -1,6 +1,7 @@
-Stack Up M2 – 꼬부기형 카드/녹음 UI 조정
+Stack Up 첫 녹음 안정화 M4
 
-GitHub sample 저장소의 index.html, app.js, style.css만 교체하세요.
-data.js, ipa-dictionary.js, manifest.json, audio/는 그대로 둡니다.
-녹음 캐시는 탭 전환/툭탁 종료 후 같은 페이지에서 보존됩니다. 새로고침/앱 재시작하면 없어집니다.
-마이크 OFF→ON 시 권한을 미리 획득합니다. 녹음 시 실제 Safari/PWA 동작은 직접 확인해야 합니다.
+GitHub sample 저장소의 index.html, app.js, style.css 3개 파일만 덮어쓰세요. data.js 등은 그대로 유지하세요.
+
+녹음 엔진 MediaRecorder / Blob / FileReader 유지. 녹음 버튼은 onstart 후 약 350ms 안정화 안내가 끝날 때 활성화됩니다. 첫 녹음이 실제로 무음인지 확인하려면 발화 준비 안내와 저장된 바이트 크기를 로그에서 확인해 주세요.
+
+기기 실측은 아직 완료되지 않았습니다.

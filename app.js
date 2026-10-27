@@ -1,11 +1,11 @@
 // 테스트 버전 확인: 앱 홈 화면이 최신 JavaScript를 읽는지 표시합니다.
         (() => {
             const build = document.getElementById('stackup-build-status');
-            if (build) build.textContent = 'HTML + JS ROUTE-R4';
+            if (build) build.textContent = 'HTML + JS REC-M4';
         })();
 
         const diag = (tag, ...info) => window.StackUpDiag?.log(tag, ...info);
-        diag("app.js 실행", "ROUTE-R4");
+        diag("app.js 실행", "REC-M4");
         // =========================================================================
         // 1. Firebase 설정 및 전역 상태 변수
         // =========================================================================
@@ -1466,7 +1466,7 @@
                     if (!globalAudioStream?.active) {
                         globalAudioStream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
                     }
-                    diag('마이크 미리 준비 완료', `active=${globalAudioStream.active}`);
+                    diag('마이크 미리 준비 완료', `active=${globalAudioStream.active}`, globalAudioStream.getAudioTracks().map(t => `state=${t.readyState},muted=${t.muted},enabled=${t.enabled}`).join(' / '));
                     if (!stackupMicEnabled) closeActiveRecordingStream();
                 } catch (err) {
                     stackupMicEnabled = false;
@@ -1714,6 +1714,8 @@
         let recorderFinalizing = false;
         let recordingSessionId = 0;
         let activeRecordingStream = null;
+        // 첫 녹음에서 입력 경로가 안정화되기 전에 말하는 일을 줄이기 위한 표시 지연
+        const RECORD_READY_DELAY_MS = 350;
 
         function closeActiveRecordingStream() {
             diag("마이크 스트림 종료", `active=${globalAudioStream?.active || false}`, `tracks=${globalAudioStream?.getAudioTracks().map(t => t.readyState).join(",") || "none"}`);
@@ -1773,10 +1775,29 @@
                 mediaRecorder = recorder;
                 audioChunks = chunks;
 
-                recorder.onstart = () => diag("녹음 이벤트 onstart", `state=${recorder.state}`, `mime=${recorder.mimeType||"unknown"}`);
+                const startedAtRequest = performance.now();
+                let recordingStartedAt = 0;
+                let readyTimer = null;
+                recorder.onstart = () => {
+                    recordingStartedAt = performance.now();
+                    diag("녹음 이벤트 onstart", `state=${recorder.state}`, `mime=${recorder.mimeType||"unknown"}`, `startDelayMs=${Math.round(recordingStartedAt-startedAtRequest)}`);
+                    // iOS 웹앱 첫 녹음은 onstart까지 늦어질 수 있으므로, 시작이 확인된 뒤 안내.
+                    readyTimer = setTimeout(() => {
+                        if (sessionId !== recordingSessionId || mediaRecorder !== recorder || recorder.state !== 'recording') return;
+                        const track = stream.getAudioTracks()[0];
+                        diag('발화 준비 안내', `track=${track?.readyState||'none'}`, `muted=${track?.muted}`, `enabled=${track?.enabled}`);
+                        btn.innerText = '🛑 녹음 중지';
+                        btn.disabled = false;
+                        btn.onclick = stopRecording;
+                        btn.classList.add('recording-audio');
+                        updateStackupPracticeUI();
+                    }, RECORD_READY_DELAY_MS);
+                };
                 recorder.ondataavailable = e => { diag("녹음 이벤트 ondataavailable", `bytes=${e.data?.size || 0}`, `mime=${e.data?.type || "unknown"}`); if (e.data && e.data.size) chunks.push(e.data); };
                 recorder.onerror = e => { diag('녹음 장치 오류', e.error?.name || 'unknown', e.error?.message || ''); console.error('녹음 장치 오류:', e.error || e); };
                 recorder.onstop = () => {
+                    if (readyTimer) clearTimeout(readyTimer);
+                    diag('녹음 시간', `durationMs=${recordingStartedAt ? Math.round(performance.now()-recordingStartedAt) : 'onstart 없음'}`);
                     // 꼬부기 스피커 모드와 동일: ondataavailable를 받은 뒤 Blob을 만들고
                     // 오디오 재생 전 마이크 입력을 닫습니다. 다음 녹음에서는 새 권한 요청 대신
                     // 이미 허용된 마이크를 getUserMedia로 다시 엽니다.
@@ -1828,12 +1849,11 @@
 
                 diag("MediaRecorder.start 호출", `state=${recorder.state}`, `mime=${recorder.mimeType || "unknown"}`);
                 recorder.start(); // Koboogy와 동일: MIME, timeslice 직접 지정하지 않음
-                recordingBusy = false;
-                btn.innerText = '🛑 녹음 중지';
-                btn.style.background = '';
+                // onstart 발생 후 입력 경로가 잠깐 안정화되면 버튼을 활성화한다.
+                // 사용자는 이때부터 말하기 시작. 녹음기는 그전부터 기록한다.
+                btn.innerText = '⏳ 녹음 준비 중...';
+                btn.disabled = true;
                 btn.onclick = stopRecording;
-                btn.classList.add('recording-audio');
-                btn.disabled = false;
             } catch (err) {
                 diag('녹음 시작 실패', err.name || 'Error', err.message || '');
                 console.error('녹음 시작 실패:', err);

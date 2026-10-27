@@ -554,3 +554,13 @@ body.admin-page-mode .nav-tabs { visibility:hidden; pointer-events:none; }
 
 #view-tuktak #action-speak #btn-speak-record.recording-audio { background:#ffe3e3!important; color:#c92a2a!important; border-color:#ffa8a8!important; }
 #view-tuktak #stackup-play-record.playing-audio { background:#d3f9d8!important; color:#2b8a3e!important; border-color:#8ce99a!important; }
+
+/* M3: 영어 카드 세로 공간 확대 (M2 대비 120%), 한글/영어 배분 개선 */
+#view-tuktak .tuktak-card { height:480px; }
+#view-tuktak .kor-half { flex:0 0 35%; }
+#view-tuktak .eng-half { flex:1 1 65%; min-height:0; overflow-y:auto; }
+@media (max-width:480px) {
+  #view-tuktak .tuktak-card { height:468px; }
+  #view-tuktak .kor-half { flex:0 0 35%; }
+  #view-tuktak .eng-half { flex:1 1 65%; }
+}
