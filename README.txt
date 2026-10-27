@@ -1,16 +1,14 @@
-Stack Up R3 - 꼬부기와 재생 흐름 맞춤 (원인 분리 테스트)
+Stack Up iPhone 홈 화면 웹앱 오류 진단 DIAG-1027-V1
 
-GitHub root의 index.html과 app.js만 덮어쓰세요.
-기존 data.js, style.css, ipa-dictionary.js, manifest.json, audio/ 등은 유지하세요.
+1. GitHub 저장소 최상위(index.html, app.js)에 두 파일을 업로드해 덮어씁니다.
+2. 다른 파일(data.js, style.css, ipa-dictionary.js, audio/, manifest.json)은 건드리지 않습니다.
+3. iPhone 웹앱에 들어가 우측 하단 [🔧 로그] 버튼이 보이는지 확인합니다.
+4. 로그를 한번 열어 [상태 확인]을 누릅니다.
+5. 닫은 다음 같은 카드에서 녹음 3~5초 → 중지 → 내 녹음 듣기 → 재녹음해 봅니다.
+6. 오류가 나면 [🔧 로그] → [📋 복사]를 눌러 이 대화에 붙여넣어 주세요.
 
-꼬부기에서 확인된 차이 2개를 수정:
-1) 녹음 onstop에서 Blob 구성 후, 재생 전에 마이크 스트림 닫기(꼬부기 스피커 모드).
-2) 내 녹음 재생 시 이미 연결한 src는 다시 바꾸지 않고, readyState>=1일 때만 currentTime=0.
+기능 변경: 이번에는 원본 R3의 녹음 엔진을 변경하지 않습니다. 오디오/마이크 이벤트, JS 오류, 로딩 측정 및 UI 패널만 추가합니다.
+로그는 기기 메모리에만 기록되며 서버로 전송하지 않습니다. 새로고침하면 로그는 사라집니다.
+복사한 로그를 공개 저장소에 올리지 마세요. 필요한 경우 이 대화에 전달해 주세요.
 
-재생 오류 발생 시 에러명/미디어 오류 코드/readyState를 화면에 표시합니다.
-NotAllowedError: 사용자 제스처/브라우저 권한 쪽.
-NotSupportedError 또는 media=4: 녹음 파일 형식/디코딩/소스 문제.
-AbortError: 재생 도중 로딩이 취소됨.
-
-테스트: iPhone 홈 화면 앱에서 3초 녹음 -> 저장 -> 내 녹음 듣기 -> 재녹음 3회.
-이 버전은 iPhone 실제 기기에서 아직 검증하지 못했습니다.
+주의: [HTML + JS DIAG-1027-V1] 버전 표시가 없으면 신규 JS를 못 읽고 있을 수 있습니다.

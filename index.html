@@ -2,6 +2,105 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
+    <script>
+/* Stack Up temporary on-device diagnostic overlay. No remote upload. */
+(function () {
+    'use strict';
+    const VERSION = 'DIAG-1027-V1';
+    const started = performance.now();
+    const events = [];
+    const MAX = 350;
+    let panel, output, status;
+    const mask = value => String(value == null ? '' : value)
+        .replace(/([A-Za-z0-9._%+-]+)@([A-Za-z0-9.-]+\.[A-Za-z]{2,})/g, '[email]')
+        .replace(/(apiKey|token|password|authorization|bearer)\s*[:=]\s*[^\s,;]+/gi, '$1=[redacted]')
+        .replace(/data:(?:audio|video)\/[^\s]+/g, '[media-data]')
+        .slice(0, 500);
+    const txt = value => {
+        if (value instanceof Error || (value && typeof value === 'object' && value.message)) {
+            return (value.name || 'Error') + ': ' + mask(value.message);
+        }
+        return mask(typeof value === 'string' ? value : JSON.stringify(value));
+    };
+    function log(tag, ...parts) {
+        const stamp = new Date().toLocaleTimeString('ko-KR', { hour12: false });
+        const entry = `[${stamp} +${Math.round(performance.now() - started)}ms] ${tag}` + (parts.length ? ' | ' + parts.map(txt).join(' | ') : '');
+        events.push(entry);
+        if (events.length > MAX) events.shift();
+        if (output && panel && panel.style.display !== 'none') {
+            output.textContent = events.join('\n');
+            output.scrollTop = output.scrollHeight;
+        }
+        if (status) status.textContent = `최근: ${tag}`;
+    }
+    function mediaState(el) {
+        if (!el) return 'element=null';
+        return `ready=${el.readyState} network=${el.networkState} error=${el.error?.code || 0} paused=${el.paused}`;
+    }
+    function snapshot() {
+        log('환경', `build=${VERSION}`, `standalone=${!!navigator.standalone || matchMedia('(display-mode: standalone)').matches}`, `secure=${isSecureContext}`, `mediaDevices=${!!navigator.mediaDevices?.getUserMedia}`, `MediaRecorder=${typeof MediaRecorder}`);
+        log('페이지', `path=${location.pathname}`, `visibility=${document.visibilityState}`, `readyState=${document.readyState}`);
+        if (window.MediaRecorder) log('녹음 지원', `mp4=${MediaRecorder.isTypeSupported?.('audio/mp4')}`, `webm=${MediaRecorder.isTypeSupported?.('audio/webm;codecs=opus')}`);
+        const p = performance.getEntriesByType('navigation')[0];
+        if (p) log('접속 단계', `responseEnd=${Math.round(p.responseEnd)}ms`, `domInteractive=${Math.round(p.domInteractive)}ms`, `load=${Math.round(p.loadEventEnd || 0)}ms`);
+        const resources = performance.getEntriesByType('resource')
+            .filter(x => /(?:\.js|\.css|\.woff|fonts|firebase|pretendard)/i.test(x.name))
+            .sort((a,b) => b.duration-a.duration).slice(0, 12);
+        for (const r of resources) log('리소스', (r.name.split('/').pop() || '').slice(0, 75), `duration=${Math.round(r.duration)}ms`, `transfer=${r.transferSize || 'unknown'}B`);
+        log('오디오', mediaState(document.getElementById('user-audio-player')));
+    }
+    function makeUI() {
+        if (document.getElementById('stackup-diagnostic-toggle')) return;
+        const toggle = document.createElement('button');
+        toggle.id = 'stackup-diagnostic-toggle';
+        toggle.type = 'button';
+        toggle.textContent = '🔧 로그';
+        toggle.setAttribute('aria-label', 'Stack Up 웹앱 진단 로그');
+        toggle.style.cssText = 'position:fixed!important;right:12px!important;bottom:calc(12px + env(safe-area-inset-bottom))!important;z-index:2147483646!important;padding:9px 12px!important;border-radius:22px!important;border:1px solid #9bb9ff!important;background:#1e3a8a!important;color:white!important;font-size:13px!important;font-weight:750!important;box-shadow:0 2px 12px #0004!important;';
+        panel = document.createElement('div');
+        panel.id = 'stackup-diagnostic-panel';
+        panel.style.cssText = 'display:none;position:fixed!important;inset:0!important;z-index:2147483645!important;background:rgba(0,0,0,.72)!important;padding:calc(12px + env(safe-area-inset-top)) 10px calc(50px + env(safe-area-inset-bottom))!important;overflow:hidden!important;box-sizing:border-box!important;';
+        panel.innerHTML = '<div style="max-width:640px;margin:auto;background:white;border-radius:14px;height:100%;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;color:#222;font:13px/1.5 -apple-system,BlinkMacSystemFont,sans-serif;">' +
+            '<div style="padding:12px;border-bottom:1px solid #ddd;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
+            '<strong style="flex:1">🔧 웹앱 진단 · '+VERSION+'</strong>' +
+            '<button id="stackup-diag-close" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px">닫기</button></div>' +
+            '<p style="padding:0 12px;margin:8px 0;font-size:12px;color:#4b5563;">녹음 시작 → 중지 → 내 녹음 듣기를 실행하고, 오류가 나면 로그를 복사해 공유해 줘. 이 로그는 서버로 전송되지 않아.</p>' +
+            '<div id="stackup-diag-status" style="padding:0 12px 6px;font-size:12px;color:#2563eb;">준비됨</div>' +
+            '<pre id="stackup-diag-lines" style="background:#101827;color:#d8f0e5;white-space:pre-wrap;word-break:break-all;overflow-y:auto;flex:1;margin:0;padding:12px;font:11px/1.5 ui-monospace,monospace;-webkit-user-select:text;user-select:text;"></pre>' +
+            '<div style="display:flex;gap:6px;padding:10px;border-top:1px solid #ddd;">' +
+            '<button id="stackup-diag-copy" style="flex:1;padding:10px 5px;border:0;border-radius:9px;background:#2563eb;color:#fff;font-weight:bold">📋 복사</button>' +
+            '<button id="stackup-diag-snapshot" style="flex:1;padding:10px 5px;border:0;border-radius:9px;background:#e5e7eb;color:#111;font-weight:bold">상태 확인</button>' +
+            '<button id="stackup-diag-clear" style="padding:10px 8px;border:0;border-radius:9px;background:#fee2e2;color:#991b1b;font-weight:bold">지우기</button></div></div>';
+        document.body.append(toggle, panel);
+        output = document.getElementById('stackup-diag-lines');
+        status = document.getElementById('stackup-diag-status');
+        toggle.onclick = () => { panel.style.display='block'; output.textContent=events.join('\n'); output.scrollTop=output.scrollHeight; };
+        document.getElementById('stackup-diag-close').onclick = () => { panel.style.display='none'; };
+        document.getElementById('stackup-diag-snapshot').onclick = snapshot;
+        document.getElementById('stackup-diag-clear').onclick = () => { events.length=0; log('로그 초기화'); };
+        document.getElementById('stackup-diag-copy').onclick = async () => {
+            const content = events.join('\n');
+            try { await navigator.clipboard.writeText(content); status.textContent='로그 복사 완료'; }
+            catch (_) {
+                const ta = document.createElement('textarea'); ta.value=content; ta.style.cssText='position:fixed;top:0;left:0;opacity:0'; document.body.appendChild(ta); ta.select();
+                let copied = false; try { copied = document.execCommand('copy'); } catch (_) {}
+                ta.remove(); status.textContent = copied ? '로그 복사 완료' : '복사 제한됨: 로그 내용을 길게 눌러 선택해 줘';
+            }
+        };
+        log('진단 패널 준비');
+    }
+    window.StackUpDiag = { version:VERSION, log, snapshot, mediaState, entries:events };
+    window.addEventListener('error', e => log('JS/리소스 오류', e.message || e.target?.src || 'unknown', e.filename ? e.filename.split('/').pop()+':'+e.lineno : ''), true);
+    window.addEventListener('unhandledrejection', e => log('Promise 거부', e.reason));
+    window.addEventListener('pagehide', () => log('웹앱 숨김 pagehide'));
+    window.addEventListener('pageshow', e => log('웹앱 표시 pageshow', `bfcache=${e.persisted}`));
+    document.addEventListener('visibilitychange', () => log('화면 변경', document.visibilityState));
+    document.addEventListener('DOMContentLoaded', () => { makeUI(); log('DOM 준비'); });
+    window.addEventListener('load', () => { log('페이지 로드 완료'); snapshot(); });
+    log('진단 실행', VERSION);
+}());
+
+    </script>
     <title>Stack Up</title> <!-- 💡 여기에 타이틀을 지정해 줍니다 -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>누적 스터디 트래커 & 툭탁 (평가 모드)</title>
@@ -11,7 +110,7 @@
     
     <!-- 📱 아이폰 / 아이패드 홈 화면 추가 시 표시되는 앱 아이콘 -->
     <link rel="apple-touch-icon" sizes="180x180" href="stackup.png">
-    <link rel="manifest" href="manifest.json?v=koboogy-r3">
+    <link rel="manifest" href="manifest.json?v=diag-1027-v1">
     
 <!-- 🌐 브라우저 테마 및 상태바 색상을 #99c0ff로 고정 -->
     <meta name="theme-color" content="#99c0ff">
@@ -33,7 +132,7 @@
 
 <body>
     <!-- 임시 진단: HTML 버전과 JS 버전을 따로 확인합니다. -->
-    <div id="stackup-build-status" style="position:fixed;bottom:6px;left:7px;z-index:999999;pointer-events:none;padding:3px 7px;background:rgba(30,41,59,.85);color:#fff;border-radius:5px;font-size:10px;font-weight:700;">HTML KOBOOGY-R3 · JS 확인 중</div>
+    <div id="stackup-build-status" style="position:fixed;bottom:6px;left:7px;z-index:999999;pointer-events:none;padding:3px 7px;background:rgba(30,41,59,.85);color:#fff;border-radius:5px;font-size:10px;font-weight:700;">HTML DIAG-1027-V1 · JS 확인 중</div>
 
     <!-- 🔴 테스트 모드 배너 -->
     <div id="test-mode-banner" style="display:none; position:fixed; top:0; left:0; width:100%; height:26px; background:#fa5252; color:white; font-size:12px; font-weight:800; text-align:center; line-height:26px; z-index:1001;">
@@ -502,6 +601,6 @@
     </div>
 
 
-    <script src="app.js?v=koboogy-r3"></script>
+    <script src="app.js?v=diag-1027-v1"></script>
 </body>
 </html>

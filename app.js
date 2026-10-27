@@ -1,9 +1,11 @@
 // 테스트 버전 확인: 앱 홈 화면이 최신 JavaScript를 읽는지 표시합니다.
         (() => {
             const build = document.getElementById('stackup-build-status');
-            if (build) build.textContent = 'HTML + JS KOBOOGY-R3';
+            if (build) build.textContent = 'HTML + JS DIAG-1027-V1';
         })();
 
+        const diag = (tag, ...info) => window.StackUpDiag?.log(tag, ...info);
+        diag("app.js 실행", "DIAG-1027-V1");
         // =========================================================================
         // 1. Firebase 설정 및 전역 상태 변수
         // =========================================================================
@@ -75,6 +77,7 @@
         // 2. 인증 및 데이터 관리
         // =========================================================================
         auth.onAuthStateChanged(async (user) => {
+            diag("Firebase 인증 상태", user ? "인증됨" : "로그아웃");
             const overlay = document.getElementById('login-overlay');
             if (user) {
                 currentUserUid = user.uid;
@@ -95,9 +98,12 @@
                 // 💡 [수정1] 하얀 화면 방지: 데이터를 기다리지 않고 트래커 화면부터 즉시 렌더링
                 setTimeout(() => { switchView('tracker'); }, 50);
 
+                diag("Firestore 다운로드 요청");
+                const firestoreStartTime = performance.now();
                 db.collection("studyUsers").doc(currentUserUid).get({ source: 'server' })
                 .catch(() => db.collection("studyUsers").doc(currentUserUid).get())
                 .then(docSnap => {
+                    diag("Firestore 응답", `time=${Math.round(performance.now()-firestoreStartTime)}ms`, `exists=${docSnap.exists}`);
                     if (docSnap.exists) {
                         userDB = docSnap.data();
                         ensureUserDBStructure();
@@ -109,7 +115,7 @@
                     userDB.lastLoginAt = new Date().toISOString();
                     saveDB(); 
                     updateDateDisplay(); 
-                }).catch(e => console.error("백그라운드 데이터 로드 실패:", e));
+                }).catch(e => { diag("Firestore 조회 실패", e.name, e.message); console.error("백그라운드 데이터 로드 실패:", e); });
             } else {
                 currentUserUid = null; isAdmin = false;
                 userDB = { completedTasks: {}, jubs: [], cardStats: {}, cardMemos: {} };
@@ -1612,6 +1618,15 @@
             }, thinkSeconds * 1000);
         }
 
+        // 웹앱 진단용: 재생 실패가 녹음 단계인지 디코더 단계인지 구분
+        (() => {
+            const audio = document.getElementById('user-audio-player');
+            if (!audio) return;
+            ['loadstart','loadedmetadata','canplay','playing','ended','stalled','abort','error'].forEach(name => {
+                audio.addEventListener(name, () => diag('오디오 이벤트 '+name, window.StackUpDiag?.mediaState(audio)));
+            });
+        })();
+
         // 🎙️ Koboogy 스피커 방식: MediaRecorder를 중지해 데이터 수집 후 재생 전 마이크 종료.
         // onstop 및 FileReader 완료 전 재녹음 차단. 기존 성공 녹음은 새 녹음 성공까지 보존.
         let recordingBusy = false;
@@ -1620,6 +1635,7 @@
         let activeRecordingStream = null;
 
         function closeActiveRecordingStream() {
+            diag("마이크 스트림 종료", `active=${globalAudioStream?.active || false}`, `tracks=${globalAudioStream?.getAudioTracks().map(t => t.readyState).join(",") || "none"}`);
             if (globalAudioStream) {
                 globalAudioStream.getTracks().forEach(track => track.stop());
             }
@@ -1645,6 +1661,7 @@
 
             const sessionId = ++recordingSessionId;
             recordingBusy = true;
+            diag("녹음 버튼", `card=${lockedIndex+1}`, `session=${sessionId}`, "마이크 요청 시작");
             btn.disabled = true;
             btn.innerText = '⏳ 마이크 연결 중...';
             stopNativeAudio();
@@ -1667,13 +1684,15 @@
                     return;
                 }
                 activeRecordingStream = stream;
+                diag("마이크 연결 성공", `active=${stream.active}`, stream.getAudioTracks().map(t => `state=${t.readyState}, muted=${t.muted}, enabled=${t.enabled}`).join(" / "));
                 const recorder = new MediaRecorder(stream);
                 const chunks = [];
                 mediaRecorder = recorder;
                 audioChunks = chunks;
 
-                recorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
-                recorder.onerror = e => { console.error('녹음 장치 오류:', e.error || e); };
+                recorder.onstart = () => diag("녹음 이벤트 onstart", `state=${recorder.state}`, `mime=${recorder.mimeType||"unknown"}`);
+                recorder.ondataavailable = e => { diag("녹음 이벤트 ondataavailable", `bytes=${e.data?.size || 0}`, `mime=${e.data?.type || "unknown"}`); if (e.data && e.data.size) chunks.push(e.data); };
+                recorder.onerror = e => { diag('녹음 장치 오류', e.error?.name || 'unknown', e.error?.message || ''); console.error('녹음 장치 오류:', e.error || e); };
                 recorder.onstop = () => {
                     // 꼬부기 스피커 모드와 동일: ondataavailable를 받은 뒤 Blob을 만들고
                     // 오디오 재생 전 마이크 입력을 닫습니다. 다음 녹음에서는 새 권한 요청 대신
@@ -1682,6 +1701,7 @@
                     if (mediaRecorder === recorder) mediaRecorder = null;
                     const recordingBytes = blob.size;
                     const recordingMime = blob.type;
+                    diag("녹음 이벤트 onstop", `bytes=${recordingBytes}`, `mime=${recordingMime}`, `chunks=${chunks.length}`, `recorderState=${recorder.state}`);
                     console.info('[StackUp 녹음 완료]', { bytes:recordingBytes, mime:recordingMime, chunks:chunks.length });
                     closeActiveRecordingStream();
                     if (sessionId !== recordingSessionId) {
@@ -1689,6 +1709,7 @@
                         return;
                     }
                     if (!blob.size) {
+                        diag("녹음 데이터 0바이트", `card=${lockedIndex+1}`, `session=${sessionId}`);
                         recordingBusy = false; recorderFinalizing = false;
                         resetRecordingButton();
                         alert('녹음 데이터가 생성되지 않았습니다. 마이크 연결 상태를 확인해 주세요.');
@@ -1696,6 +1717,7 @@
                     }
                     const reader = new FileReader();
                     reader.onerror = () => {
+                        diag("녹음 변환 FileReader 오류", reader.error?.name || "unknown");
                         recordingBusy = false; recorderFinalizing = false;
                         resetRecordingButton();
                         alert('녹음 저장에 실패했습니다.');
@@ -1704,12 +1726,13 @@
                         recordingBusy = false; recorderFinalizing = false;
                         if (sessionId !== recordingSessionId || typeof reader.result !== 'string') return;
                         const result = reader.result;
+                        diag('녹음 저장 완료', `dataURLLength=${result.length}`, `mime=${recordingMime}`, `bytes=${recordingBytes}`);
                         const key = card.ch + '_' + card.eng;
                         sessionAudioCache[key] = result;
                         if (currentCardIndex !== lockedIndex) return;
                         userAudioUrl = result;
                         const player = document.getElementById('user-audio-player');
-                        if (player) { player.src = result; player.load(); }
+                        if (player) { player.src = result; player.load(); diag("재생 소스 연결", window.StackUpDiag?.mediaState(player)); }
                         isAnswerRevealed = true;
                         document.getElementById('eng-half')?.classList.add('revealed');
                         const engHalf = document.getElementById('eng-half');
@@ -1719,6 +1742,7 @@
                     reader.readAsDataURL(blob);
                 };
 
+                diag("MediaRecorder.start 호출", `state=${recorder.state}`, `mime=${recorder.mimeType || "unknown"}`);
                 recorder.start(); // Koboogy와 동일: MIME, timeslice 직접 지정하지 않음
                 recordingBusy = false;
                 btn.innerText = '🛑 녹음 중지';
@@ -1726,6 +1750,7 @@
                 btn.onclick = stopRecording;
                 btn.disabled = false;
             } catch (err) {
+                diag('녹음 시작 실패', err.name || 'Error', err.message || '');
                 console.error('녹음 시작 실패:', err);
                 recordingBusy = false; recorderFinalizing = false;
                 if (sessionId === recordingSessionId) {
@@ -1741,6 +1766,7 @@
             recorderFinalizing = true;
             const btn = document.getElementById('btn-speak-record');
             if (btn) { btn.disabled = true; btn.innerText = '⏳ 녹음 저장 중...'; }
+            diag("MediaRecorder.stop 호출", `state=${mediaRecorder.state}`, `mime=${mediaRecorder.mimeType || "unknown"}`);
             try { mediaRecorder.stop(); }
             catch (err) {
                 console.error('녹음 종료 실패:', err);
@@ -1754,7 +1780,8 @@
             // 버튼을 누를 때마다 src를 다시 지정하면 iOS PWA에서 새 로딩/탐색이 겹칠 수 있습니다.
             stopNativeAudio();
             const player = document.getElementById('user-audio-player');
-            if (!player || !userAudioUrl) { alert('녹음된 소리가 없습니다.'); return; }
+            if (!player || !userAudioUrl) { diag('재생 요청 실패', '오디오 URL 없음'); alert('녹음된 소리가 없습니다.'); return; }
+            diag('재생 버튼 클릭', window.StackUpDiag?.mediaState(player), `dataURLLength=${userAudioUrl.length}`);
             try {
                 // 카드 전환 등으로 src가 누락된 예외에만 소스를 복구합니다.
                 if (player.getAttribute('src') !== userAudioUrl) {
@@ -1764,9 +1791,11 @@
                 player.volume = 1;
                 if (player.readyState >= 1) player.currentTime = 0;
                 await player.play();
+                diag("play() 성공", window.StackUpDiag?.mediaState(player));
             } catch (err) {
                 const mediaCode = player.error?.code || 0;
                 const diagnostics = `${err.name || 'Error'} / media=${mediaCode} / ready=${player.readyState}`;
+                diag("play() 실패", diagnostics, err.message || "", `network=${player.networkState}`);
                 console.error('[StackUp 내 녹음 재생 실패]', diagnostics, err, {
                     mime: (userAudioUrl.match(/^data:([^;]+)/) || [,'unknown'])[1],
                     dataLength: userAudioUrl.length
@@ -1776,6 +1805,7 @@
         }
 
         function reRecord() {
+            diag("재녹음 버튼 클릭", `recordingBusy=${recordingBusy}`, `finalizing=${recorderFinalizing}`, `recorderState=${mediaRecorder?.state || "none"}`);
             if (recordingBusy || recorderFinalizing || (mediaRecorder && mediaRecorder.state !== 'inactive')) return;
             document.getElementById('user-audio-player')?.pause();
             isAnswerRevealed = true;
