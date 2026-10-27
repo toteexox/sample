@@ -569,3 +569,10 @@ body.admin-page-mode .nav-tabs { visibility:hidden; pointer-events:none; }
 #view-tuktak #card-speed-controls { justify-content:flex-start; }
 #view-tuktak #stackup-practice-controls { display:block; }
 .date-simulator:has(#btn-toggle-mission-day[style*="block"]) #currentDateDisplay { max-width:58%; font-size:11px; }
+
+/* M4B: 날짜 바가 아닌 오늘의 미션 카드 목록 위에 전날/오늘 미션 전환 버튼 배치 */
+.mission-section-header { justify-content:space-between; align-items:center; flex-wrap:nowrap; gap:10px; }
+.mission-section-header h2 { min-width:0; }
+.mission-day-switch { flex-shrink:0; white-space:nowrap; border:0; border-radius:11px; background:#e8f6ff; color:#1267ac; font-size:14px; font-weight:800; padding:8px 12px; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+.mission-day-switch:active { background:#cfeaff; }
+@media (max-width:390px) { .mission-section-header h2 { font-size:18px; } .mission-day-switch { font-size:13px; padding:7px 10px; } }
