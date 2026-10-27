@@ -565,10 +565,7 @@ body.admin-page-mode .nav-tabs { visibility:hidden; pointer-events:none; }
   #view-tuktak .eng-half { flex:1 1 65%; }
 }
 
-/* M5: 명확한 상태 버튼. 비활성/평상시는 기존 중립 색상 유지. */
-#view-tuktak #action-speak #btn-speak-record.recording-audio {
-    background:#ff4938!important; color:#fff!important; border-color:#ff4938!important;
-}
-#view-tuktak #stackup-play-record.playing-audio:not(:disabled) {
-    background:#159a4f!important; color:#fff!important; border-color:#159a4f!important;
-}
+/* M4 rollback: direct mic button; no pre-open toggle */
+#view-tuktak #card-speed-controls { justify-content:flex-start; }
+#view-tuktak #stackup-practice-controls { display:block; }
+.date-simulator:has(#btn-toggle-mission-day[style*="block"]) #currentDateDisplay { max-width:58%; font-size:11px; }

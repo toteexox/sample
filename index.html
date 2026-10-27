@@ -6,7 +6,7 @@
 /* Stack Up temporary on-device diagnostic overlay. No remote upload. */
 (function () {
     'use strict';
-    const VERSION = 'REC-M4';
+    const VERSION = 'ROLLBACK-M4A';
     const started = performance.now();
     const events = [];
     const MAX = 350;
@@ -125,14 +125,14 @@
     <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-    <link rel="stylesheet" href="style.css?v=rec-m4">
+    <link rel="stylesheet" href="style.css?v=rollback-m4a">
 
 
 </head>
 
 <body>
     <!-- 임시 진단: HTML 버전과 JS 버전을 따로 확인합니다. -->
-    <div id="stackup-build-status" style="position:fixed;bottom:6px;left:7px;z-index:999999;pointer-events:none;padding:3px 7px;background:rgba(30,41,59,.85);color:#fff;border-radius:5px;font-size:10px;font-weight:700;">HTML REC-M4 · JS 확인 중</div>
+    <div id="stackup-build-status" style="position:fixed;bottom:6px;left:7px;z-index:999999;pointer-events:none;padding:3px 7px;background:rgba(30,41,59,.85);color:#fff;border-radius:5px;font-size:10px;font-weight:700;">HTML ROLLBACK-M4A · JS 확인 중</div>
 
     <!-- 🔴 테스트 모드 배너 -->
     <div id="test-mode-banner" style="display:none; position:fixed; top:0; left:0; width:100%; height:26px; background:#fa5252; color:white; font-size:12px; font-weight:800; text-align:center; line-height:26px; z-index:1001;">
@@ -162,6 +162,7 @@
     <!-- 실시간 한국 시간 표시바 -->
     <div class="date-simulator" style="justify-content:center; font-weight:700; position:fixed;">
         <span id="currentDateDisplay">📅 불러오는 중...</span>
+        <button type="button" id="btn-toggle-mission-day" onclick="toggleYesterdayMission()" style="display:none;position:absolute;left:8px;border:1px solid #cbd5e1;background:#fff;color:#334155;border-radius:8px;padding:6px 9px;font-size:12px;font-weight:800;white-space:nowrap;cursor:pointer;">◀ 전날 미션</button>
         <button id="admin-panel-btn" onclick="openAdminModal()" style="display:none; position:absolute; right:12px; background:#eef4ff; color:#1d4ed8; border:0; border-radius:8px; padding:6px 10px; font-size:12px; font-weight:800; white-space:nowrap;">👑 관리자</button>
     </div>
 
@@ -356,7 +357,7 @@
                         <span class="speed-btn active" onclick="setSpeed(1.0, event)">x1.0</span>
                     </div>
                 </div>
-                <button type="button" id="stackup-mic-toggle" onclick="toggleStackupMic()" aria-pressed="false">🎙️ OFF</button>
+
             </div>
 
             <!-- 마이크 ON일 때 노출; 기존 단계형 제어와 독립적으로 작동 -->
@@ -598,6 +599,6 @@
     </div>
 
 
-    <script src="app.js?v=rec-m4"></script>
+    <script src="app.js?v=rollback-m4a"></script>
 </body>
 </html>

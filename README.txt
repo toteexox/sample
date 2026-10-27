@@ -1,8 +1,8 @@
-Stack Up M5: 녹음 첫 사용 안정화 및 줍줍 변형문장 TTS 제거
+StackUp M4 rollback M4A — 2026-10-28
 
-GitHub sample 저장소의 index.html / app.js / style.css 파일만 교체합니다.
-data.js, ipa-dictionary.js, manifest.json, audio/ 폴더는 변경하지 마세요.
-
-변경: 마이크 ON 후 약 0.75초 사전 예열(음원 저장 안 함), 스트림 재사용, 첫 녹음 진단 로그, 변형문장 TTS/원문 음원 차단, playFallbackTTS 미정의 오류 해결, 녹음 중지 빨강 및 재생 중지 진초록.
-
-주의: iPhone 홈화면 웹앱 실기기 검증 전입니다. 마이크 ON 시 입력 예열 때문에 최초 버튼 반응이 약간 늦을 수 있습니다.
+1. GitHub sample 루트에 index.html / app.js / style.css 덮어쓰기. data.js, ipa-dictionary.js, manifest.json, audio/ 는 유지.
+2. 00:00~01:59 (한국시간) 전날 미션 토글 복구.
+3. 마이크 ON/OFF 버튼 제거. 녹음 버튼을 누르면 마이크를 요청하며 원래 M4 방식대로 onstop 후 스트림을 종료.
+4. M5 예열 로직 제거. M4 자체에도 최초 녹음 무음 가능성은 남아 있으며 이 수정이 문제를 완전히 해결한다고 보장하지 않음.
+5. 성취도/임시 녹음 캐시/카드 UI 및 기타 기능 보존.
+6. 웹앱에서 실제 녹음 성공 검증 전. 테스트: 전날 미션 토글→녹음→재생→재녹음 및 오늘 미션 비교.

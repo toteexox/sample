@@ -1,11 +1,11 @@
 // 테스트 버전 확인: 앱 홈 화면이 최신 JavaScript를 읽는지 표시합니다.
         (() => {
             const build = document.getElementById('stackup-build-status');
-            if (build) build.textContent = 'HTML + JS REC-M4';
+            if (build) build.textContent = 'HTML + JS ROLLBACK-M4A';
         })();
 
         const diag = (tag, ...info) => window.StackUpDiag?.log(tag, ...info);
-        diag("app.js 실행", "REC-M4");
+        diag("app.js 실행", "ROLLBACK-M4A");
         // =========================================================================
         // 1. Firebase 설정 및 전역 상태 변수
         // =========================================================================
@@ -523,6 +523,18 @@
             return { m, d, h, min };
         }
 
+        // 새벽 00:00~01:59(KST) 전날 미션 조회. 새벽 2시 이후에는 자동 복귀.
+        let isYesterdayMissionMode = false;
+        function toggleYesterdayMission() {
+            const now = getKSTDate();
+            if (!isYesterdayMissionMode && now.getHours() >= 2) return;
+            isYesterdayMissionMode = !isYesterdayMissionMode;
+            const btn = document.getElementById('btn-toggle-mission-day');
+            if (btn) btn.textContent = isYesterdayMissionMode ? '▶ 오늘 미션' : '◀ 전날 미션';
+            renderTracker();
+            diag('미션 날짜 전환', isYesterdayMissionMode ? '전날' : '오늘');
+        }
+
         function updateDateDisplay() {
             simulatedDate = getKSTDate(); // 💡 매초 한국 시간 동기화
 
@@ -542,7 +554,7 @@
             if (toggleBtn) {
                 const hour = simulatedDate.getHours();
                 if (hour >= 0 && hour < 2) { 
-                    toggleBtn.style.display = 'block'; 
+                    toggleBtn.style.display = 'block'; toggleBtn.textContent = isYesterdayMissionMode ? '▶ 오늘 미션' : '◀ 전날 미션'; 
                 } else {
                     toggleBtn.style.display = 'none';
                     if (typeof isYesterdayMissionMode !== 'undefined' && isYesterdayMissionMode) toggleYesterdayMission();
@@ -1433,11 +1445,11 @@
             return !!(currentTaskId && currentTaskId.includes('2일차') && card && card.badge.includes('UE'));
         }
         // UI M1: 성취도와 재생/녹음 버튼은 단계에 상관없이 계속 표시.
-        let stackupMicEnabled = false;
+        let stackupMicEnabled = true; // M4 rollback: UI toggle removed; mic requested only by direct recording button
         function updateStackupPracticeUI() {
             const area = document.getElementById('stackup-practice-controls');
             const toggle = document.getElementById('stackup-mic-toggle');
-            if (area) area.style.display = stackupMicEnabled && !isAutoPlayActive ? 'block' : 'none';
+            if (area) area.style.display = !isAutoPlayActive ? 'block' : 'none';
             if (toggle) { toggle.textContent = stackupMicEnabled ? '🎙️ ON' : '🎙️ OFF'; toggle.classList.toggle('on', stackupMicEnabled); toggle.setAttribute('aria-pressed', String(stackupMicEnabled)); }
             const card = currentDeck[currentCardIndex];
             const key = card ? card.ch + '_' + card.eng : null;
@@ -1453,32 +1465,6 @@
                 el.classList.toggle('chosen', !!selected);
             });
         }
-        // 첫 녹음 시에만 생기는 iOS 오디오 입력 초기화 지연을 줄이기 위한 사전 준비.
-        // 테스트 음원은 저장하거나 재생하지 않고, 마이크 스트림만 이어서 재사용한다.
-        async function primeRecordingInput(stream) {
-            if (!stream?.active || !window.MediaRecorder) return;
-            const track = stream.getAudioTracks()[0];
-            if (!track || track.readyState !== 'live') return;
-            const warmup = new MediaRecorder(stream);
-            await new Promise(resolve => {
-                let done = false;
-                const finish = () => { if (done) return; done = true; clearTimeout(safety); resolve(); };
-                const safety = setTimeout(() => {
-                    if (warmup.state === 'recording') { try { warmup.stop(); } catch (_) {} }
-                    finish();
-                }, 2400);
-                warmup.ondataavailable = () => {};
-                warmup.onstop = finish;
-                warmup.onerror = () => { diag('입력 예열 오류'); finish(); };
-                warmup.onstart = () => {
-                    diag('입력 예열 시작', `track=${track.readyState}`, `muted=${track.muted}`);
-                    setTimeout(() => { if (warmup.state === 'recording') { try { warmup.stop(); } catch (_) {} } }, 750);
-                };
-                try { warmup.start(); } catch (err) { diag('입력 예열 건너뜀', err.name || 'Error'); finish(); }
-            });
-            diag('입력 예열 완료', `track=${track.readyState}`, `muted=${track.muted}`);
-        }
-
         async function toggleStackupMic() {
             if (recordingBusy || recorderFinalizing || (mediaRecorder && mediaRecorder.state === 'recording')) return;
             stackupMicEnabled = !stackupMicEnabled;
@@ -1493,7 +1479,6 @@
                         globalAudioStream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
                     }
                     diag('마이크 미리 준비 완료', `active=${globalAudioStream.active}`, globalAudioStream.getAudioTracks().map(t => `state=${t.readyState},muted=${t.muted},enabled=${t.enabled}`).join(' / '));
-                    await primeRecordingInput(globalAudioStream);
                     if (!stackupMicEnabled) closeActiveRecordingStream();
                 } catch (err) {
                     stackupMicEnabled = false;
@@ -1834,8 +1819,7 @@
                     const recordingMime = blob.type;
                     diag("녹음 이벤트 onstop", `bytes=${recordingBytes}`, `mime=${recordingMime}`, `chunks=${chunks.length}`, `recorderState=${recorder.state}`);
                     console.info('[StackUp 녹음 완료]', { bytes:recordingBytes, mime:recordingMime, chunks:chunks.length });
-                    // M5: ON 상태에서는 연결 유지. 다음 녹음 때 입력 경로 초기화를 반복하지 않음.
-                    if (!stackupMicEnabled) closeActiveRecordingStream();
+                    closeActiveRecordingStream();
                     if (sessionId !== recordingSessionId) {
                         recordingBusy = false; recorderFinalizing = false;
                         return;
@@ -2028,25 +2012,10 @@
         // =========================================================================
         // 9. 오디오 제어 (원어민 / TTS / 단일 카드)
         // =========================================================================
-        // M5: 원음원이 없는 일반 원문에만 대체 TTS 제공. 변형문장에는 재생하지 않음.
-        function playFallbackTTS(text) {
-            const card = currentDeck[currentCardIndex];
-            if (card && (card.eng || '').trim() !== (card.originalEng || card.eng || '').trim()) {
-                diag('변형문장 TTS 생략', `route=${currentTaskId ? 'mission' : 'burning'}`);
-                return;
-            }
-            if (!text || !('speechSynthesis' in window)) return;
-            window.speechSynthesis.cancel();
-            const utter = new SpeechSynthesisUtterance(text);
-            utter.lang = 'en-US';
-            utter.rate = Math.max(0.5, Math.min(2, currentAudioSpeed || 1));
-            window.speechSynthesis.speak(utter);
-        }
-
         function playNativeAudio(e) {
             if(e) e.stopPropagation(); stopNativeAudio(); const card = currentDeck[currentCardIndex]; if (!card) return;
             const cleanEng = (card.eng || "").replace(/\s+/g, " ").trim(); const cleanOrig = (card.originalEng || "").replace(/\s+/g, " ").trim();
-            if (cleanEng !== cleanOrig) { diag('변형문장: 원어민 음원/TTS 미재생'); return; }
+            if (cleanEng !== cleanOrig) { playFallbackTTS(card.eng); return; }
             if (card.audio && card.end > card.start) {
                 const player = document.getElementById('native-audio-player');
                 const startPlay = () => {
@@ -2062,7 +2031,6 @@
         function playChunk(idx, e) {
             if(e) e.stopPropagation(); stopNativeAudio(); const card = currentDeck[currentCardIndex]; if (!card || !card.chunks || !card.chunks[idx]) return;
             const chunk = card.chunks[idx];
-            if ((card.eng || '').trim() !== (card.originalEng || card.eng || '').trim()) return;
             if (card.audio && chunk.e > chunk.s) {
                 const player = document.getElementById('native-audio-player');
                 const startChunkPlay = () => {
@@ -2093,7 +2061,6 @@
             Array.from(items).forEach(el => { el.style.border = "1px solid #e9ecef"; el.style.boxShadow = "none"; });
             if (items[index]) { items[index].style.border = "2px solid #4dabf7"; items[index].style.boxShadow = "0 4px 12px rgba(77,171,247,0.2)"; }
             const isModified = (card.originalEng && card.originalEng !== card.eng);
-            if (currentListType === 'basket' && isModified) { diag('줍줍 변형문장 TTS 생략'); return; }
             if (card.audio && card.end > card.start) {
                 const player = document.getElementById('native-audio-player'); if (!player.src.endsWith(encodeURI(card.audio))) player.src = card.audio;
                 player.playbackRate = currentAudioSpeed; player.currentTime = card.start; const durationMs = ((card.end - card.start) * 1000) / currentAudioSpeed;
