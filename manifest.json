@@ -1,8 +1,8 @@
 {
   "name": "Stack Up - 누적복습 스터디",
   "short_name": "Stack Up",
-  "start_url": "/stackup/",
-  "scope": "/stackup/",
+  "start_url": "/sample/",
+  "scope": "/sample/",
   "display": "standalone",
   "background_color": "#f4f6f9",
   "theme_color": "#4dabf7",
