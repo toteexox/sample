@@ -1,7 +1,7 @@
 // 테스트 버전 확인: 앱 홈 화면이 최신 JavaScript를 읽는지 표시합니다.
         (() => {
             const build = document.getElementById('stackup-build-status');
-            if (build) build.textContent = 'HTML + JS KOBOOGY-R2';
+            if (build) build.textContent = 'HTML + JS KOBOOGY-R3';
         })();
 
         // =========================================================================
@@ -1612,7 +1612,7 @@
             }, thinkSeconds * 1000);
         }
 
-        // 🎙️ Koboogy 방식: 마이크 스트림을 유지하고 MediaRecorder만 시작/중지합니다.
+        // 🎙️ Koboogy 스피커 방식: MediaRecorder를 중지해 데이터 수집 후 재생 전 마이크 종료.
         // onstop 및 FileReader 완료 전 재녹음 차단. 기존 성공 녹음은 새 녹음 성공까지 보존.
         let recordingBusy = false;
         let recorderFinalizing = false;
@@ -1654,7 +1654,7 @@
                 if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
                     throw new Error('HTTPS 환경에서 마이크 접근이 가능한 브라우저가 필요합니다.');
                 }
-                // 꼬부기처럼 마이크 ON 상태를 재사용. 트랙 종료 시에만 다시 허용 요청.
+                // Koboogy처럼 기본 MediaRecorder를 사용. 종료된 트랙이면 getUserMedia로 다시 연결.
                 let stream = globalAudioStream;
                 if (!stream || !stream.active || !stream.getAudioTracks().some(t => t.readyState === 'live')) {
                     stream = await navigator.mediaDevices.getUserMedia({
@@ -1675,10 +1675,15 @@
                 recorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
                 recorder.onerror = e => { console.error('녹음 장치 오류:', e.error || e); };
                 recorder.onstop = () => {
-                    // 중요: 여기서 stream.getTracks().stop()을 호출하지 않습니다.
-                    // 파일 생성과 다음 녹음 모두 같은 활성 마이크 스트림을 재사용합니다.
+                    // 꼬부기 스피커 모드와 동일: ondataavailable를 받은 뒤 Blob을 만들고
+                    // 오디오 재생 전 마이크 입력을 닫습니다. 다음 녹음에서는 새 권한 요청 대신
+                    // 이미 허용된 마이크를 getUserMedia로 다시 엽니다.
                     const blob = new Blob(chunks, { type:recorder.mimeType || chunks[0]?.type || 'audio/mp4' });
                     if (mediaRecorder === recorder) mediaRecorder = null;
+                    const recordingBytes = blob.size;
+                    const recordingMime = blob.type;
+                    console.info('[StackUp 녹음 완료]', { bytes:recordingBytes, mime:recordingMime, chunks:chunks.length });
+                    closeActiveRecordingStream();
                     if (sessionId !== recordingSessionId) {
                         recordingBusy = false; recorderFinalizing = false;
                         return;
@@ -1745,11 +1750,29 @@
         }
 
         async function playUserAudio() {
+            // 꼬부기 방식: 녹음 저장 시 지정해둔 오디오 소스를 그대로 재생합니다.
+            // 버튼을 누를 때마다 src를 다시 지정하면 iOS PWA에서 새 로딩/탐색이 겹칠 수 있습니다.
             stopNativeAudio();
             const player = document.getElementById('user-audio-player');
-            if (!userAudioUrl) { alert('녹음된 소리가 없습니다.'); return; }
-            try { player.pause(); player.src = userAudioUrl; player.volume = 1; player.currentTime = 0; await player.play(); }
-            catch (err) { console.error('녹음 재생 실패:', err); alert('녹음 재생에 실패했습니다.'); }
+            if (!player || !userAudioUrl) { alert('녹음된 소리가 없습니다.'); return; }
+            try {
+                // 카드 전환 등으로 src가 누락된 예외에만 소스를 복구합니다.
+                if (player.getAttribute('src') !== userAudioUrl) {
+                    player.src = userAudioUrl;
+                    player.load();
+                }
+                player.volume = 1;
+                if (player.readyState >= 1) player.currentTime = 0;
+                await player.play();
+            } catch (err) {
+                const mediaCode = player.error?.code || 0;
+                const diagnostics = `${err.name || 'Error'} / media=${mediaCode} / ready=${player.readyState}`;
+                console.error('[StackUp 내 녹음 재생 실패]', diagnostics, err, {
+                    mime: (userAudioUrl.match(/^data:([^;]+)/) || [,'unknown'])[1],
+                    dataLength: userAudioUrl.length
+                });
+                alert('녹음 재생 오류: ' + diagnostics + '\n이 문구를 캡처해서 알려 주세요.');
+            }
         }
 
         function reRecord() {
