@@ -527,3 +527,30 @@ body.admin-page-mode .nav-tabs { visibility:hidden; pointer-events:none; }
 @media (max-width:480px) { .stackup-audio-buttons {gap:6px} #stackup-play-record,#action-speak #btn-speak-record {font-size:13px;min-height:46px} .stackup-speed-left {gap:1px} #stackup-mic-toggle {padding:8px;font-size:12px} }
 /* OFF/auto 상태 제어: 상위 패널 숨김 우선 */
 #stackup-practice-controls[style*="display: none"] { display:none!important; }
+
+/* M2: 문장 카드만 테두리, 학습 도구는 바깥쪽. 모바일 화면 잘림 방지 */
+#view-tuktak .tuktak-container { overflow:visible; border:0; border-radius:0; background:transparent; box-shadow:none; margin-bottom:12px; }
+#view-tuktak .tuktak-card { height:400px; min-height:0; border:2px solid var(--primary-color); border-radius:20px; overflow:hidden; background:#fff; box-shadow:0 7px 20px rgba(0,0,0,.05); }
+#view-tuktak .kor-half { flex:1 1 40%; min-height:0; }
+#view-tuktak .eng-half { flex:1 1 60%; min-height:0; padding:24px 12px 10px; overflow-y:auto; }
+#view-tuktak .eng-box { height:auto; min-height:100%; padding-bottom:35px; }
+#view-tuktak #card-nav-buttons { bottom:6px; }
+#view-tuktak #card-speed-controls { margin:8px 0 8px; min-height:34px; }
+#view-tuktak #stackup-mic-toggle { padding:5px 9px; line-height:1.2; min-height:30px; font-size:13px; }
+#view-tuktak .stackup-audio-buttons { margin-bottom:8px; }
+#view-tuktak #stackup-play-record, #view-tuktak #action-speak #btn-speak-record { background:#edf2f7!important; color:#364152!important; border-color:#cbd5e1!important; }
+#view-tuktak #action-speak #btn-speak-record[onclick="stopRecording()"] { background:#ffe3e3!important; color:#c92a2a!important; border-color:#ffa8a8!important; }
+#view-tuktak #stackup-play-record:not(:disabled):active { background:#d3f9d8!important; color:#2b8a3e!important; }
+#view-tuktak #score-controls .eval-btn { background:#e9ecef!important; color:#868e96!important; border-color:#dee2e6!important; box-shadow:none; }
+#view-tuktak #score-controls .eval-btn.chosen.btn-fluent { background:#d3f9d8!important; color:#2b8a3e!important; border-color:#8ce99a!important; }
+#view-tuktak #score-controls .eval-btn.chosen.btn-hesitant { background:#fff3bf!important; color:#b36b00!important; border-color:#ffe066!important; }
+#view-tuktak #score-controls .eval-btn.chosen.btn-stuck { background:#ffe3e3!important; color:#c92a2a!important; border-color:#ffa8a8!important; }
+@media (max-width:480px) {
+  #view-tuktak .tuktak-card {height:390px;}
+  #view-tuktak .kor-half {flex-basis:40%;}
+  #view-tuktak .eng-half {flex-basis:60%;}
+  #view-tuktak .eng-text {font-size:22px;}
+}
+
+#view-tuktak #action-speak #btn-speak-record.recording-audio { background:#ffe3e3!important; color:#c92a2a!important; border-color:#ffa8a8!important; }
+#view-tuktak #stackup-play-record.playing-audio { background:#d3f9d8!important; color:#2b8a3e!important; border-color:#8ce99a!important; }

@@ -67,7 +67,16 @@
         let audioChunks = [];
         let userAudioUrl = null;
         let globalAudioStream = null; 
-        let sessionAudioCache = {}; 
+        // 탭/툭탁 화면을 오가는 동안 카드별 음성 보존 (새로고침 전까지).
+        // data URL 저장: 녹음 실패 시 기존 캐시는 덮어쓰지 않음.
+        let sessionAudioCache = {};
+        const SESSION_AUDIO_LIMIT = 80;
+        function rememberCardAudio(key, dataUrl) {
+            if (sessionAudioCache[key]) delete sessionAudioCache[key];
+            sessionAudioCache[key] = dataUrl;
+            const keys = Object.keys(sessionAudioCache);
+            while (keys.length > SESSION_AUDIO_LIMIT) delete sessionAudioCache[keys.shift()];
+        }
 
         // 줍줍/메모 모달
         let editingJubId = null;
@@ -1424,7 +1433,7 @@
             return !!(currentTaskId && currentTaskId.includes('2일차') && card && card.badge.includes('UE'));
         }
         // UI M1: 성취도와 재생/녹음 버튼은 단계에 상관없이 계속 표시.
-        let stackupMicEnabled = true;
+        let stackupMicEnabled = false;
         function updateStackupPracticeUI() {
             const area = document.getElementById('stackup-practice-controls');
             const toggle = document.getElementById('stackup-mic-toggle');
@@ -1435,21 +1444,35 @@
             const hasAudio = !!(key && sessionAudioCache[key]);
             const play = document.getElementById('stackup-play-record');
             const player = document.getElementById('user-audio-player');
-            if (play) { play.disabled = !hasAudio; play.textContent = player && !player.paused && hasAudio ? '⏹️ 재생 중지' : '🎧 내 발음 듣기'; }
+            if (play) { play.disabled = !hasAudio; const playing = player && !player.paused && hasAudio; play.textContent = playing ? '⏹️ 재생 중지' : '🎧 내 발음 듣기'; play.classList.toggle('playing-audio', !!playing); }
             const speak = document.getElementById('btn-speak-record');
+            if (speak) speak.classList.toggle('recording-audio', !!mediaRecorder && mediaRecorder.state === 'recording');
             if (speak && !recordingBusy && !recorderFinalizing && (!mediaRecorder || mediaRecorder.state !== 'recording')) resetRecordingButton();
             document.querySelectorAll('#score-controls .eval-btn').forEach(el => {
                 const selected = card && userDB.cardStats[key] === el.textContent.trim();
                 el.classList.toggle('chosen', !!selected);
             });
         }
-        function toggleStackupMic() {
+        async function toggleStackupMic() {
             if (recordingBusy || recorderFinalizing || (mediaRecorder && mediaRecorder.state === 'recording')) return;
             stackupMicEnabled = !stackupMicEnabled;
             if (!stackupMicEnabled) {
                 const player = document.getElementById('user-audio-player');
                 if (player) player.pause();
                 closeActiveRecordingStream();
+            } else {
+                // 사용자 탭 직후 마이크 권한을 미리 확보. 실제 녹음은 시작 버튼에서만 진행.
+                try {
+                    if (!globalAudioStream?.active) {
+                        globalAudioStream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+                    }
+                    diag('마이크 미리 준비 완료', `active=${globalAudioStream.active}`);
+                    if (!stackupMicEnabled) closeActiveRecordingStream();
+                } catch (err) {
+                    stackupMicEnabled = false;
+                    diag('마이크 준비 실패',err.name,err.message);
+                    alert('마이크를 열지 못했습니다. 웹앱의 마이크 권한을 확인해 주세요.');
+                }
             }
             diag('마이크 UI 토글', stackupMicEnabled ? 'ON' : 'OFF');
             updateStackupPracticeUI();
@@ -1705,8 +1728,9 @@
             const btn = document.getElementById('btn-speak-record');
             if (!btn) return;
             btn.innerText = '🎤 녹음 시작';
-            btn.style.background = '#5ba4ff';
+            btn.style.background = '';
             btn.onclick = startRecording;
+            btn.classList.remove('recording-audio');
             btn.disabled = false;
         }
 
@@ -1787,7 +1811,7 @@
                         const result = reader.result;
                         diag('녹음 저장 완료', `dataURLLength=${result.length}`, `mime=${recordingMime}`, `bytes=${recordingBytes}`);
                         const key = card.ch + '_' + card.eng;
-                        sessionAudioCache[key] = result;
+                        rememberCardAudio(key, result);
                         if (currentCardIndex !== lockedIndex) return;
                         userAudioUrl = result;
                         const player = document.getElementById('user-audio-player');
@@ -1806,8 +1830,9 @@
                 recorder.start(); // Koboogy와 동일: MIME, timeslice 직접 지정하지 않음
                 recordingBusy = false;
                 btn.innerText = '🛑 녹음 중지';
-                btn.style.background = '#fa5252';
+                btn.style.background = '';
                 btn.onclick = stopRecording;
+                btn.classList.add('recording-audio');
                 btn.disabled = false;
             } catch (err) {
                 diag('녹음 시작 실패', err.name || 'Error', err.message || '');
@@ -1928,8 +1953,8 @@
             const evalModal = document.getElementById('eval-popup-modal'); if (evalModal) evalModal.classList.remove('active');
             const btn = document.getElementById('btn-auto-play'); if (btn) btn.classList.remove('active');
             if (globalAudioStream) { globalAudioStream.getTracks().forEach(t => t.stop()); globalAudioStream = null; }
-            Object.values(sessionAudioCache).forEach(url => { if (url?.startsWith('blob:')) URL.revokeObjectURL(url); });
-            sessionAudioCache = {}; userAudioUrl = null; ueChoicePending = false;
+            // 툭탁을 종료해도 임시 녹음 캐시는 보존. 새로고침 시에만 초기화.
+            userAudioUrl = null; ueChoicePending = false;
             const bottomControls = document.getElementById('bottom-app-controls'); if (bottomControls) bottomControls.style.display = 'flex';
             const pdfBtn = document.getElementById('pdf-download-btn'); if (pdfBtn) pdfBtn.style.display = 'inline-block';
             const activeTabIdx = Array.from(document.querySelectorAll('.nav-tab')).findIndex(t => t.classList.contains('active'));

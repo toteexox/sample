@@ -345,7 +345,7 @@
                     </div>
                 </div>
                 
-            <!-- 꼬부기형: 배속 우측의 마이크 토글. OFF 시 녹음/평가 영역만 숨김 -->
+            <!-- 녹음/평가 도구는 카드 테두리 바깥에 독립 배치 -->
             <div id="card-speed-controls">
                 <div class="stackup-speed-left">
                     <span style="font-size:13px;font-weight:800;color:#868e96;margin-right:8px;">오디오 배속</span>
@@ -356,7 +356,7 @@
                         <span class="speed-btn active" onclick="setSpeed(1.0, event)">x1.0</span>
                     </div>
                 </div>
-                <button type="button" id="stackup-mic-toggle" onclick="toggleStackupMic()" aria-pressed="true">🎙️ ON</button>
+                <button type="button" id="stackup-mic-toggle" onclick="toggleStackupMic()" aria-pressed="false">🎙️ OFF</button>
             </div>
 
             <!-- 마이크 ON일 때 노출; 기존 단계형 제어와 독립적으로 작동 -->
@@ -377,7 +377,6 @@
                         <button class="eval-btn btn-stuck" onclick="selectCardScore('막힘')">막힘</button>
                     </div>
                 </div>
-            </div>
             </div>
         </div>
 

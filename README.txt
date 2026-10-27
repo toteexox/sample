@@ -1,4 +1,6 @@
-Stack Up 꼬부기형 녹음 UI M1
-GitHub sample 저장소에서 index.html, app.js, style.css 세 파일만 덮어쓰기. data.js/ipa-dictionary.js/audio/manifest.json 그대로 유지.
-마이크 ON일 때 내 발음 듣기/녹음 시작/성취도 표시. OFF일 때 숨김. 녹음은 기존 검증된 MediaRecorder 유지. 자동학습에서는 숨김. 최신 녹음은 같은 툭탁 세션 내 카드별 캐시 유지.
-실기기 녹음/화면 동작은 테스트 필요.
+Stack Up M2 – 꼬부기형 카드/녹음 UI 조정
+
+GitHub sample 저장소의 index.html, app.js, style.css만 교체하세요.
+data.js, ipa-dictionary.js, manifest.json, audio/는 그대로 둡니다.
+녹음 캐시는 탭 전환/툭탁 종료 후 같은 페이지에서 보존됩니다. 새로고침/앱 재시작하면 없어집니다.
+마이크 OFF→ON 시 권한을 미리 획득합니다. 녹음 시 실제 Safari/PWA 동작은 직접 확인해야 합니다.
