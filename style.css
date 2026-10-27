@@ -505,3 +505,25 @@ body.admin-page-mode .nav-tabs { visibility:hidden; pointer-events:none; }
     #view-admin .admin-page-inner { padding:16px; border-radius:14px; }
     #view-admin .admin-page-inner > div:first-child h3 { font-size:17px !important; }
 }
+
+/* Stack Up · 꼬부기형 녹음/평가 패널 (M1) */
+#view-tuktak #card-speed-controls { display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; margin:12px 0 9px; }
+.stackup-speed-left { display:flex; align-items:center; gap:4px; min-width:0; flex-wrap:wrap; }
+#stackup-mic-toggle { flex-shrink:0; border:1px solid #ced4da; border-radius:10px; background:#f1f3f5; color:#868e96; padding:9px 12px; font-weight:800; font-size:13px; cursor:pointer; }
+#stackup-mic-toggle.on { border-color:#80adff; color:#1d4ed8; background:#e7f0ff; }
+#stackup-practice-controls { margin:0 0 16px; }
+.stackup-audio-buttons { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:14px; }
+#stackup-play-record, #action-speak #btn-speak-record { width:100%; min-height:48px; border-radius:12px; border:1px solid #b9d5ff; color:#1864ab; background:#e7f5ff; font-size:15px; font-weight:800; cursor:pointer; }
+#stackup-play-record:disabled { opacity:.4; cursor:not-allowed; }
+#action-speak { display:block!important; height:auto; border:0; padding:0; background:transparent; }
+#action-speak #btn-speak-record { display:block; background:#f1f3f5; color:#343a40; border-color:#adb5bd; padding:0 8px; }
+#action-speak #btn-speak-record:disabled { opacity:.55; }
+#user-record-controls { display:none!important; }
+#score-controls { display:block!important; height:auto; border:0; background:transparent; }
+.stackup-score-title { text-align:center; font-size:13px; font-weight:800; color:#6c757d; padding:6px 0 10px; }
+#score-controls .eval-btn-group { gap:8px; height:auto; }
+#score-controls .eval-btn { border:1px solid transparent; min-height:46px; border-radius:12px; }
+#score-controls .eval-btn.chosen { border-color:#5ba4ff; box-shadow:inset 0 0 0 1px #5ba4ff; }
+@media (max-width:480px) { .stackup-audio-buttons {gap:6px} #stackup-play-record,#action-speak #btn-speak-record {font-size:13px;min-height:46px} .stackup-speed-left {gap:1px} #stackup-mic-toggle {padding:8px;font-size:12px} }
+/* OFF/auto 상태 제어: 상위 패널 숨김 우선 */
+#stackup-practice-controls[style*="display: none"] { display:none!important; }

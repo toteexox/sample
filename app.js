@@ -1,11 +1,11 @@
 // 테스트 버전 확인: 앱 홈 화면이 최신 JavaScript를 읽는지 표시합니다.
         (() => {
             const build = document.getElementById('stackup-build-status');
-            if (build) build.textContent = 'HTML + JS DIAG-1027-V1';
+            if (build) build.textContent = 'HTML + JS ROUTE-R4';
         })();
 
         const diag = (tag, ...info) => window.StackUpDiag?.log(tag, ...info);
-        diag("app.js 실행", "DIAG-1027-V1");
+        diag("app.js 실행", "ROUTE-R4");
         // =========================================================================
         // 1. Firebase 설정 및 전역 상태 변수
         // =========================================================================
@@ -1238,6 +1238,7 @@
         }
 
         function startTuktakDaily(chStr, dayLabel) {
+            diag("툭탁 진입 요청", `route=mission`, `chapter=${chStr}`, `day=${dayLabel}`);
             if (typeof studyData === 'undefined') return alert("⚠️ data.js 파일이 없습니다!");
             
             let useDay2FallbackForDay4 = false;
@@ -1317,6 +1318,7 @@
         }
 
         function startBurningMode() {
+            diag("툭탁 진입 요청", `route=burning`, `listIndex=${currentListIdx}`, `listType=${currentListType}`, `listSize=${globalTempLists[currentListIdx]?.length || 0}`);
             const list = globalTempLists[currentListIdx];
             if(!list || list.length === 0) return;
             
@@ -1392,6 +1394,7 @@
         }
 
         function launchTuktakView() {
+            diag("툭탁 진입 확정", `route=${currentTaskId ? "mission" : "burning"}`, `task=${currentTaskId || "none"}`, `count=${currentDeck.length}`, `index=${currentCardIndex}`, `maxReached=${maxReachedIndex}`, `missionLock=${isRequiredMissionSession}`);
             stopNativeAudio();
             
             document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
@@ -1420,13 +1423,48 @@
             const card = currentDeck[currentCardIndex];
             return !!(currentTaskId && currentTaskId.includes('2일차') && card && card.badge.includes('UE'));
         }
-        function showCardStep(step) {
-            ['action-speak','score-controls','user-record-controls'].forEach(id => {
-                document.getElementById(id).style.display = 'none';
+        // UI M1: 성취도와 재생/녹음 버튼은 단계에 상관없이 계속 표시.
+        let stackupMicEnabled = true;
+        function updateStackupPracticeUI() {
+            const area = document.getElementById('stackup-practice-controls');
+            const toggle = document.getElementById('stackup-mic-toggle');
+            if (area) area.style.display = stackupMicEnabled && !isAutoPlayActive ? 'block' : 'none';
+            if (toggle) { toggle.textContent = stackupMicEnabled ? '🎙️ ON' : '🎙️ OFF'; toggle.classList.toggle('on', stackupMicEnabled); toggle.setAttribute('aria-pressed', String(stackupMicEnabled)); }
+            const card = currentDeck[currentCardIndex];
+            const key = card ? card.ch + '_' + card.eng : null;
+            const hasAudio = !!(key && sessionAudioCache[key]);
+            const play = document.getElementById('stackup-play-record');
+            const player = document.getElementById('user-audio-player');
+            if (play) { play.disabled = !hasAudio; play.textContent = player && !player.paused && hasAudio ? '⏹️ 재생 중지' : '🎧 내 발음 듣기'; }
+            const speak = document.getElementById('btn-speak-record');
+            if (speak && !recordingBusy && !recorderFinalizing && (!mediaRecorder || mediaRecorder.state !== 'recording')) resetRecordingButton();
+            document.querySelectorAll('#score-controls .eval-btn').forEach(el => {
+                const selected = card && userDB.cardStats[key] === el.textContent.trim();
+                el.classList.toggle('chosen', !!selected);
             });
-            const target = { record:'action-speak', score:'score-controls', review:'user-record-controls' }[step];
-            if (target) document.getElementById(target).style.display = step === 'review' ? 'flex' : 'flex';
-            document.getElementById('card-nav-buttons').style.display = (step === 'review' || step === 'score') ? 'flex' : 'none';
+        }
+        function toggleStackupMic() {
+            if (recordingBusy || recorderFinalizing || (mediaRecorder && mediaRecorder.state === 'recording')) return;
+            stackupMicEnabled = !stackupMicEnabled;
+            if (!stackupMicEnabled) {
+                const player = document.getElementById('user-audio-player');
+                if (player) player.pause();
+                closeActiveRecordingStream();
+            }
+            diag('마이크 UI 토글', stackupMicEnabled ? 'ON' : 'OFF');
+            updateStackupPracticeUI();
+        }
+        async function toggleStackupPlayback() {
+            const player = document.getElementById('user-audio-player');
+            if (!stackupMicEnabled || !player || !userAudioUrl) return;
+            if (!player.paused) { player.pause(); updateStackupPracticeUI(); return; }
+            await playUserAudio();
+            updateStackupPracticeUI();
+        }
+        function showCardStep(step) {
+            const nav = document.getElementById('card-nav-buttons');
+            if (nav) nav.style.display = step === 'record' && !isAnswerRevealed ? 'none' : 'flex';
+            updateStackupPracticeUI();
         }
         function showReviewStep() {
             isAnswerRevealed = true;
@@ -1447,6 +1485,7 @@
             const colors = { '술술':['#d3f9d8','#2b8a3e'], '버벅':['#fff3bf','#f59f00'], '막힘':['#ffe3e3','#e03131'] };
             [badge.style.background,badge.style.color] = colors[status];
             showReviewStep();
+            updateStackupPracticeUI();
         }
         function showCard() {
             stopNativeAudio(); stopAutoPlayTimer(); ueChoicePending = false;
@@ -1455,6 +1494,7 @@
 
             const card = currentDeck[currentCardIndex];
             const cardKey = card.ch + "_" + card.eng; 
+            diag("카드 표시", `route=${currentTaskId ? "mission" : "burning"}`, `index=${currentCardIndex}`, `maxReached=${maxReachedIndex}`, `hasCache=${!!sessionAudioCache[cardKey]}`, `recordingBusy=${recordingBusy}`, `finalizing=${recorderFinalizing}`);
 
             document.getElementById('tuktak-badge').innerText = card.badge;
             document.getElementById('tuktak-counter').innerText = `${currentCardIndex + 1} / ${currentDeck.length}`;
@@ -1498,6 +1538,8 @@
                 if (player) player.src = userAudioUrl;
             } else {
                 userAudioUrl = null;
+                const p = document.getElementById('user-audio-player');
+                if (p) { p.pause(); p.removeAttribute('src'); p.load(); }
             }
 
             let isPastCard = currentCardIndex < maxReachedIndex;
@@ -1524,14 +1566,29 @@
                 document.getElementById('card-nav-buttons').style.display = 'none';
             }
 
-            showCardStep(isPastCard ? 'review' : 'record');
+            // 지난 카드라도 이번 세션에 녹음이 없으면 재생 버튼 대신 새 녹음 제공.
+            // 녹음이 있는 지난 카드에서는 기존 복습 컨트롤을 유지.
+            if (isPastCard && !sessionAudioCache[cardKey]) {
+                showCardStep('record');
+                const speakBtn = document.getElementById('btn-speak-record');
+                speakBtn.innerText = '🎤 다시 녹음하기';
+                speakBtn.style.background = '#5ba4ff';
+                speakBtn.onclick = startRecording;
+                speakBtn.disabled = false;
+                document.getElementById('card-nav-buttons').style.display = 'flex';
+                diag('지난 카드: 녹음 캐시 없음, 새 녹음 버튼 표시', `index=${currentCardIndex}`);
+            } else {
+                showCardStep(isPastCard ? 'review' : 'record');
+            }
             const speedControls = document.getElementById('card-speed-controls');
             if (speedControls) {
-                if (card.eng !== card.originalEng || !card.audio) speedControls.style.display = 'none';
-                else speedControls.style.display = 'flex';
+                speedControls.style.display = 'flex';
+                const speeds = document.getElementById('stackup-speed-options');
+                if (speeds) speeds.style.display = card.eng !== card.originalEng || !card.audio ? 'none' : 'flex';
             }
             
             updateJubButtonState();
+            updateStackupPracticeUI();
         }
 
         function revealAnswerWithoutRecording(e) {
@@ -1596,6 +1653,7 @@
             const engHalf = document.getElementById('eng-half');
             engHalf.classList.remove('revealed'); engHalf.onclick = null;
             ['action-speak','score-controls','user-record-controls','card-nav-buttons'].forEach(id => document.getElementById(id).style.display = 'none');
+            document.getElementById('stackup-practice-controls').style.display = 'none';
             const originalDuration = getOriginalAudioDuration(card.ch, card.originalEng);
             const audioDuration = (card.audio && card.end > card.start && card.eng === card.originalEng) ? card.end - card.start : (originalDuration || Math.max(2, (card.eng || '').split(/\s+/).length / 2.5));
             const thinkSeconds = Math.min(24, Math.max(5, audioDuration * autoThinkRatio + 2));
@@ -1646,13 +1704,14 @@
         function resetRecordingButton() {
             const btn = document.getElementById('btn-speak-record');
             if (!btn) return;
-            btn.innerText = '🎤 녹음 시작하기';
+            btn.innerText = '🎤 녹음 시작';
             btn.style.background = '#5ba4ff';
             btn.onclick = startRecording;
             btn.disabled = false;
         }
 
         async function startRecording() {
+            if (!stackupMicEnabled) return;
             if (recordingBusy || recorderFinalizing || (mediaRecorder && mediaRecorder.state !== 'inactive')) return;
             const btn = document.getElementById('btn-speak-record');
             const lockedIndex = currentCardIndex;
@@ -1661,7 +1720,7 @@
 
             const sessionId = ++recordingSessionId;
             recordingBusy = true;
-            diag("녹음 버튼", `card=${lockedIndex+1}`, `session=${sessionId}`, "마이크 요청 시작");
+            diag("녹음 버튼", `route=${currentTaskId ? "mission" : "burning"}`, `task=${currentTaskId || "none"}`, `card=${lockedIndex+1}`, `session=${sessionId}`, "마이크 요청 시작");
             btn.disabled = true;
             btn.innerText = '⏳ 마이크 연결 중...';
             stopNativeAudio();
@@ -1738,6 +1797,7 @@
                         const engHalf = document.getElementById('eng-half');
                         if (engHalf) engHalf.onclick = null;
                         showCardStep('score');
+                        updateStackupPracticeUI();
                     };
                     reader.readAsDataURL(blob);
                 };
@@ -1781,7 +1841,7 @@
             stopNativeAudio();
             const player = document.getElementById('user-audio-player');
             if (!player || !userAudioUrl) { diag('재생 요청 실패', '오디오 URL 없음'); alert('녹음된 소리가 없습니다.'); return; }
-            diag('재생 버튼 클릭', window.StackUpDiag?.mediaState(player), `dataURLLength=${userAudioUrl.length}`);
+            diag('재생 버튼 클릭', `route=${currentTaskId ? "mission" : "burning"}`, window.StackUpDiag?.mediaState(player), `dataURLLength=${userAudioUrl.length}`);
             try {
                 // 카드 전환 등으로 src가 누락된 예외에만 소스를 복구합니다.
                 if (player.getAttribute('src') !== userAudioUrl) {
@@ -1804,8 +1864,15 @@
             }
         }
 
+        (function setupStackupPlaybackButton() {
+            document.addEventListener('DOMContentLoaded', () => {
+                const p = document.getElementById('user-audio-player');
+                if (p) ['playing', 'pause', 'ended', 'error'].forEach(event => p.addEventListener(event, updateStackupPracticeUI));
+            });
+        })();
+
         function reRecord() {
-            diag("재녹음 버튼 클릭", `recordingBusy=${recordingBusy}`, `finalizing=${recorderFinalizing}`, `recorderState=${mediaRecorder?.state || "none"}`);
+            diag("재녹음 버튼 클릭", `route=${currentTaskId ? "mission" : "burning"}`, `hasAudio=${!!userAudioUrl}`, `recordingBusy=${recordingBusy}`, `finalizing=${recorderFinalizing}`, `recorderState=${mediaRecorder?.state || "none"}`);
             if (recordingBusy || recorderFinalizing || (mediaRecorder && mediaRecorder.state !== 'inactive')) return;
             document.getElementById('user-audio-player')?.pause();
             isAnswerRevealed = true;
@@ -1851,6 +1918,7 @@
         }
 
         function exitTuktak() { 
+            diag("툭탁 종료", `route=${currentTaskId ? "mission" : "burning"}`, `lastCard=${currentCardIndex}`);
             isRequiredMissionSession = false;
             stopNativeAudio(); isAutoPlayActive = false; autoPlayGeneration++; stopAutoPlayTimer(); updateAutoPlayAccess();
             recordingSessionId++;
