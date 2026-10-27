@@ -11,7 +11,7 @@
     
     <!-- 📱 아이폰 / 아이패드 홈 화면 추가 시 표시되는 앱 아이콘 -->
     <link rel="apple-touch-icon" sizes="180x180" href="stackup.png">
-    <link rel="manifest" href="manifest.json">
+    <link rel="manifest" href="manifest.json?v=1027pwa3">
     
 <!-- 🌐 브라우저 테마 및 상태바 색상을 #99c0ff로 고정 -->
     <meta name="theme-color" content="#99c0ff">
@@ -26,12 +26,14 @@
     <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=1027pwa3">
 
 
 </head>
 
 <body>
+    <!-- 임시 진단: HTML 버전과 JS 버전을 따로 확인합니다. -->
+    <div id="stackup-build-status" style="position:fixed;bottom:6px;left:7px;z-index:999999;pointer-events:none;padding:3px 7px;background:rgba(30,41,59,.85);color:#fff;border-radius:5px;font-size:10px;font-weight:700;">HTML 1027-PWA3 · JS 확인 중</div>
 
     <!-- 🔴 테스트 모드 배너 -->
     <div id="test-mode-banner" style="display:none; position:fixed; top:0; left:0; width:100%; height:26px; background:#fa5252; color:white; font-size:12px; font-weight:800; text-align:center; line-height:26px; z-index:1001;">
@@ -503,7 +505,7 @@
 
 
 	
-    <script src="ipa-dictionary.js"></script>
-    <script src="app.js"></script>
+    <script src="ipa-dictionary.js?v=1027pwa3"></script>
+    <script src="app.js?v=1027pwa3"></script>
 </body>
 </html>
