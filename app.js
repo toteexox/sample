@@ -890,41 +890,52 @@
         // =========================================================================
         // 6. 학습 / 줍줍 리스트 렌더링
         // =========================================================================
-        // M7: 학습/줍줍 챕터를 6열 x 2행으로 선택. 선택은 탭 이동 후에도 유지.
-        // 기존 문장 목록/녹음/성취도/미션 데이터 구조는 변경하지 않습니다.
-        let selectedLearnChapter = '01';
-        let selectedBasketChapter = '01';
+        // M9: 화면용 필터만 다중 선택. Firestore나 학습 데이터는 수정하지 않음.
+        const selectedStudyChapters = {
+            learn: new Set(['01']),
+            basket: new Set(['01'])
+        };
 
         function renderChapterSelector(type) {
             const view = document.getElementById('view-' + type);
             const table = view?.querySelector('.stats-table-wrapper');
-            if (!view || !table) return;
+            if (!view || !table || !selectedStudyChapters[type]) return;
             let selector = document.getElementById(type + '-chapter-selector');
             if (!selector) {
                 selector = document.createElement('div');
                 selector.id = type + '-chapter-selector';
                 selector.className = 'chapter-selector';
                 selector.setAttribute('role', 'group');
-                selector.setAttribute('aria-label', '학습할 챕터 선택');
+                selector.setAttribute('aria-label', '학습할 챕터 다중 선택');
                 table.parentNode.insertBefore(selector, table);
             }
-            const selected = type === 'learn' ? selectedLearnChapter : selectedBasketChapter;
-            selector.innerHTML = Array.from({length: 12}, (_, i) => {
+            const selected = selectedStudyChapters[type];
+            // 전체 보기 버튼을 6x2 그리드 밖 위에 두어 1~6 / 7~12 행을 고정함.
+            selector.innerHTML = `<div class="chapter-selector-toolbar">
+                <span>챕터 선택 <small>(복수 선택 가능)</small></span>
+                <button type="button" class="chapter-select-all" onclick="selectAllStudyChapters('${type}')">전체 보기</button>
+            </div><div class="chapter-selector-grid">${Array.from({length: 12}, (_, i) => {
                 const ch = String(i + 1).padStart(2, '0');
-                const active = selected === ch;
+                const active = selected.has(ch);
                 return `<button type="button" class="chapter-select-btn${active ? ' active' : ''}" aria-pressed="${active}" aria-label="챕터 ${ch}" onclick="selectStudyChapter('${type}', '${ch}')"><span class="chapter-select-prefix">CH</span><span>${ch}</span></button>`;
-            }).join('');
+            }).join('')}</div>`;
         }
 
         function selectStudyChapter(type, chapter) {
-            if (!/^(0[1-9]|1[0-2])$/.test(chapter)) return;
-            if (type === 'learn') {
-                selectedLearnChapter = chapter;
-                renderLearnTable();
-            } else if (type === 'basket') {
-                selectedBasketChapter = chapter;
-                renderBasketTable();
-            }
+            if (!selectedStudyChapters[type] || !/^(0[1-9]|1[0-2])$/.test(chapter)) return;
+            const selected = selectedStudyChapters[type];
+            if (selected.has(chapter)) selected.delete(chapter);
+            else selected.add(chapter);
+            // 0개 선택 시 표는 비워 두되 선택 UI는 남김.
+            if (type === 'learn') renderLearnTable();
+            else renderBasketTable();
+        }
+
+        function selectAllStudyChapters(type) {
+            if (!selectedStudyChapters[type]) return;
+            selectedStudyChapters[type] = new Set(Array.from({length:12}, (_,i) => String(i+1).padStart(2,'0')));
+            if (type === 'learn') renderLearnTable();
+            else renderBasketTable();
         }
 
         function renderLearnTable() {
@@ -937,7 +948,7 @@
 
             for(let i=1; i<=12; i++) {
                 let chStr = i < 10 ? '0'+i : ''+i;
-                if (chStr !== selectedLearnChapter) continue;
+                if (!selectedStudyChapters.learn.has(chStr)) continue;
                 const d = studyData[chStr]; if(!d) continue;
 
                 let msCards = extractCards(d.mystory ? d.mystory.sentences : [], `MS ${chStr}`, d.mystory ? d.mystory.audio : "", chStr);
@@ -1009,53 +1020,63 @@
         }
 
 
+        // 기존 j.section 예: MS 02, MS UE 02 (변형), RC 02, RC UE 02 (변형)
+        // 새 필드나 데이터 마이그레이션 없이 표시 그룹만 구분.
+        function getJubSourceGroup(section) {
+            const name = String(section || '').trim().toUpperCase();
+            if (/^MS(?:\s|$)/.test(name)) return 'MS';
+            if (/^RC(?:\s|$)/.test(name)) return 'RC';
+            return '기타';
+        }
+
         function renderBasketTable() {
-            const tbody = document.getElementById('basket-table-body'); tbody.innerHTML = '';
+            const tbody = document.getElementById('basket-table-body');
+            tbody.innerHTML = '';
             globalTempLists = [];
             renderChapterSelector('basket');
 
-            document.querySelector('#view-basket .stats-table thead tr').innerHTML = '<th>CH</th><th>전체</th><th>술술</th><th>버벅</th><th>막힘</th><th>미평가</th>';
+            document.querySelector('#view-basket .stats-table thead tr').innerHTML = '<th>CH</th><th>출처</th><th>전체</th><th>술술</th><th>버벅</th><th>막힘</th><th>미평가</th>';
 
             for(let i=1; i<=12; i++) {
-                let chStr = i < 10 ? '0'+i : ''+i;
-                if (chStr !== selectedBasketChapter) continue;
-                let jubs = userDB.jubs.filter(j => j.ch === chStr);
-                if(jubs.length === 0) {
-                    tbody.innerHTML += `<tr><td class="col-ch">${chStr}</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>`;
-                    continue;
-                }
-
-                let basketCards = jubs.map(j => ({
-                    kor: j.kor, eng: j.eng, ipa: j.ipa||"", audio: j.audio||"", start: j.start||0, end: j.end||0,
-                    originalEng: j.originalEng, badge: j.section, ch: chStr, jubId: j.id
+                const chStr = String(i).padStart(2, '0');
+                if (!selectedStudyChapters.basket.has(chStr)) continue;
+                const jubs = (userDB.jubs || []).filter(j => j.ch === chStr);
+                const basketCards = jubs.map(j => ({
+                    kor:j.kor, eng:j.eng, ipa:j.ipa||'', audio:j.audio||'',
+                    start:j.start||0, end:j.end||0, originalEng:j.originalEng,
+                    badge:j.section, ch:chStr, jubId:j.id
                 }));
+                const groups = [
+                    {label:'총합', cards:basketCards},
+                    {label:'MS', cards:basketCards.filter(c => getJubSourceGroup(c.badge) === 'MS')},
+                    {label:'RC', cards:basketCards.filter(c => getJubSourceGroup(c.badge) === 'RC')}
+                ];
+                const other = basketCards.filter(c => getJubSourceGroup(c.badge) === '기타');
+                if (other.length) groups.push({label:'기타', cards:other});
 
-                let bStats = { total: basketCards, fluent: [], hesitant: [], stuck: [], untested: [] };
-                basketCards.forEach(c => {
-                    let st = getCardStatus(c.ch, c.eng); 
-                    if(st === '술술') bStats.fluent.push(c);
-                    else if(st === '버벅') bStats.hesitant.push(c);
-                    else if(st === '막힘') bStats.stuck.push(c);
-                    else bStats.untested.push(c); 
+                groups.forEach((group, groupIndex) => {
+                    const stats = {fluent:[], hesitant:[], stuck:[], untested:[]};
+                    group.cards.forEach(c => {
+                        const status = getCardStatus(c.ch, c.eng);
+                        if (status === '술술') stats.fluent.push(c);
+                        else if (status === '버벅') stats.hesitant.push(c);
+                        else if (status === '막힘') stats.stuck.push(c);
+                        else stats.untested.push(c);
+                    });
+                    const groupsForCells = [group.cards, stats.fluent, stats.hesitant, stats.stuck, stats.untested];
+                    const keys = ['','num-fluent','num-hesitant','num-stuck','num-untested'];
+                    const labels = ['전체','술술','버벅','막힘','미평가'];
+                    const cells = groupsForCells.map((cards,idx) => {
+                        const listIndex = pushGlobalList(cards);
+                        if (!cards.length) return '<td>-</td>';
+                        return `<td class="clickable ${keys[idx]}" onclick="showList('basket', 'CH${chStr} ${group.label} - ${labels[idx]}', ${listIndex})">${cards.length}</td>`;
+                    }).join('');
+                    const row = document.createElement('tr');
+                    row.innerHTML = `${groupIndex === 0 ? `<td class="col-ch" rowspan="${groups.length}">${chStr}</td>` : ''}<td class="col-part" style="${groupIndex===0 ? 'background:#f1f3f5;font-weight:800;' : ''}">${group.label}</td>${cells}`;
+                    tbody.appendChild(row);
                 });
-
-                let tIdx = pushGlobalList(bStats.total); let fIdx = pushGlobalList(bStats.fluent);
-                let hIdx = pushGlobalList(bStats.hesitant); let sIdx = pushGlobalList(bStats.stuck);
-                let uIdx = pushGlobalList(bStats.untested);
-
-                let tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td class="col-ch">${chStr}</td>
-                    <td class="${bStats.total.length>0?'clickable':''}" onclick="showList('basket', 'CH${chStr} 담은 문장 전체', ${tIdx})">${bStats.total.length || '-'}</td>
-                    <td class="${bStats.fluent.length>0?'clickable num-fluent':''}" onclick="showList('basket', 'CH${chStr} 줍줍 - 술술', ${fIdx})">${bStats.fluent.length || '-'}</td>
-                    <td class="${bStats.hesitant.length>0?'clickable num-hesitant':''}" onclick="showList('basket', 'CH${chStr} 줍줍 - 버벅', ${hIdx})">${bStats.hesitant.length || '-'}</td>
-                    <td class="${bStats.stuck.length>0?'clickable num-stuck':''}" onclick="showList('basket', 'CH${chStr} 줍줍 - 막힘', ${sIdx})">${bStats.stuck.length || '-'}</td>
-                    <td class="${bStats.untested.length>0?'clickable num-untested':''}" onclick="showList('basket', 'CH${chStr} 줍줍 - 미평가', ${uIdx})">${bStats.untested.length || '-'}</td>
-                `;
-                tbody.appendChild(tr);
             }
         }
-
 
         function showList(type, title, listIdx) {
             currentListType = type; currentListIdx = listIdx; currentListTitle = title; 
@@ -1086,7 +1107,7 @@
             if (btn) { btn.innerText = "🎧"; btn.style.background = "#f1f3f5"; btn.style.color = "#495057"; }
             document.getElementById(type + '-list-container').style.display = 'none';
             const chapterPicker = document.getElementById(type + '-chapter-selector');
-            if (chapterPicker) chapterPicker.style.display = 'grid';
+            if (chapterPicker) chapterPicker.style.display = 'block';
             document.querySelectorAll(`#view-${type} .stats-table-wrapper`).forEach(el => el.style.display = 'block');
             document.querySelectorAll(`#view-${type} .schedule-info-box`).forEach(el => el.style.display = 'flex');
         }
@@ -2124,12 +2145,22 @@ function nextCard(e) {
         }
     }
 
-    // 기존 2일차 UE 줍줍 팝업 유지 (성취도 저장이 우선).
-    if (
-        isUeDay2() &&
-        !uePromptHandled.has(`${currentTaskId}:${currentCardIndex}`)
-    ) {
-        document.getElementById('ue-prompt-modal').classList.add('active');
+    // 2일차 UE: 같은 원문으로 이미 줍줍한 기록이 있으면 추가 요구 없이 자동 통과.
+    if (isUeDay2() && !uePromptHandled.has(`${currentTaskId}:${currentCardIndex}`)) {
+        const normalized = text => String(text || '').replace(/\s+/g, ' ').trim();
+        const alreadyJubbed = (userDB.jubs || []).some(j =>
+            j.ch === card.ch && normalized(j.originalEng) === normalized(card.originalEng)
+        );
+        if (alreadyJubbed) {
+            diag('2일차 줍줍 기존 기록 확인 → 자동 통과', `card=${currentCardIndex + 1}`);
+            advanceToNextCard();
+            return;
+        }
+        // 기록이 없는 카드만 줍줍 선택 창 표시. 이미 평가한 카드는 성취도 재요청 없음.
+        const modal = document.getElementById('ue-prompt-modal');
+        const passButton = modal?.querySelector('button[onclick="uePromptPass()"]');
+        if (passButton) passButton.style.display = 'none';
+        if (modal) modal.classList.add('active');
         return;
     }
 
@@ -2244,27 +2275,83 @@ function nextCard(e) {
         // =========================================================================
         // 10. 장바구니 줍줍 및 컨텍스트 메모 수정
         // =========================================================================
+        // 팝업 내의 과거 줍줍을 수정하고 다시 추가 화면으로 돌아갈지 추적.
+        let returnToJubCreation = false;
+        function renderPreviousJubs(card) {
+            const container = document.getElementById('existing-jubs-list');
+            if (!container) return;
+            container.innerHTML = '';
+            if (!card) return;
+            const normalized = text => String(text || '').replace(/\s+/g, ' ').trim();
+            const existing = (userDB.jubs || []).filter(j =>
+                j.ch === card.ch && normalized(j.originalEng) === normalized(card.originalEng)
+            );
+            if (!existing.length) return;
+            const heading = document.createElement('div');
+            heading.className = 'existing-jubs-heading';
+            heading.textContent = `💡 이전에 담아둔 문장들 (${existing.length}) · 수정 가능`;
+            container.appendChild(heading);
+            existing.forEach(j => {
+                const row = document.createElement('div');
+                row.className = 'existing-jub-row';
+                const info = document.createElement('div');
+                info.className = 'existing-jub-info';
+                const eng = document.createElement('div');
+                eng.className = 'existing-jub-eng';
+                eng.textContent = j.eng; // 사용자 입력은 HTML로 삽입하지 않음
+                const kor = document.createElement('div');
+                kor.className = 'existing-jub-kor';
+                kor.textContent = j.kor;
+                const edit = document.createElement('button');
+                edit.type = 'button';
+                edit.className = 'existing-jub-edit';
+                edit.textContent = '✏️ 수정';
+                edit.onclick = event => editExistingJubFromModal(j.id, event);
+                info.append(eng, kor); row.append(info, edit); container.appendChild(row);
+            });
+        }
+
         function openEditModal(e) {
-            if(e) e.stopPropagation(); editingJubId = null; const card = currentDeck[currentCardIndex];
-            document.getElementById('edit-modal-title').innerText = "🧺 장바구니 담기 (변형)"; document.getElementById('btn-save-jub').innerText = "[장바구니 담기]";
-            document.getElementById('edit-kor').value = document.getElementById('tuktak-kor').innerText; document.getElementById('edit-eng').value = document.getElementById('tuktak-eng').innerText; document.getElementById('edit-ipa').value = ""; document.getElementById('edit-ipa').dataset.initialIpa = "";
-            const existing = userDB.jubs.filter(j => j.originalEng === card.originalEng); const container = document.getElementById('existing-jubs-list');
-            if (existing.length > 0) {
-                let html = '<hr style="border:0; border-top:1px dashed #dee2e6; margin:14px 0;"><div style="font-weight:800; font-size:13px; color:#495057; margin-bottom:8px;">💡 이전에 담아둔 문장들</div>';
-                existing.forEach(j => { html += `<div style="background:#f1f3f5; border-radius:8px; padding:10px; margin-bottom:6px;"><div style="color:#2b8a3e; font-weight:700; font-size:14px;">${j.eng}</div><div style="color:#868e96; font-size:12px; margin-top:4px;">${j.kor}</div></div>`; });
-                container.innerHTML = html;
-            } else { container.innerHTML = ''; }
-            document.getElementById('jub-generation-status').textContent = '한글 번역은 외부 번역 서비스에 영어 문장이 전송됩니다.'; document.getElementById('btn-generate-jub').textContent = '✨ 한글 / IPA 자동 생성'; document.getElementById('edit-modal').classList.add('active');
+            if(e) e.stopPropagation();
+            returnToJubCreation = false;
+            editingJubId = null;
+            const card = currentDeck[currentCardIndex];
+            if (!card) return;
+            document.getElementById('edit-modal-title').innerText = '🧺 장바구니 담기 (변형)';
+            document.getElementById('btn-save-jub').innerText = '[장바구니 담기]';
+            document.getElementById('edit-kor').value = document.getElementById('tuktak-kor').innerText;
+            document.getElementById('edit-eng').value = document.getElementById('tuktak-eng').innerText;
+            document.getElementById('edit-ipa').value = '';
+            document.getElementById('edit-ipa').dataset.initialIpa = '';
+            renderPreviousJubs(card);
+            document.getElementById('jub-generation-status').textContent = '한글 번역은 외부 번역 서비스에 영어 문장이 전송됩니다.';
+            document.getElementById('btn-generate-jub').textContent = '✨ 한글 / IPA 자동 생성';
+            document.getElementById('edit-modal').classList.add('active');
+        }
+
+        function editExistingJubFromModal(id, e) {
+            returnToJubCreation = true;
+            openEditJubFromList(id, e);
         }
 
         function openEditJubFromList(id, e) {
-            if(e) e.stopPropagation(); const jub = userDB.jubs.find(j => j.id === id); if(!jub) return;
-            editingJubId = id; document.getElementById('edit-modal-title').innerText = "✏️ 줍줍 문장 수정"; document.getElementById('btn-save-jub').innerText = "[수정 완료]";
-            document.getElementById('edit-kor').value = jub.kor; document.getElementById('edit-eng').value = jub.eng; document.getElementById('edit-ipa').value = jub.ipa || ""; document.getElementById('edit-ipa').dataset.initialIpa = jub.ipa || "";
-            document.getElementById('existing-jubs-list').innerHTML = ''; document.getElementById('jub-generation-status').textContent = '한글 번역은 외부 번역 서비스에 영어 문장이 전송됩니다.'; document.getElementById('btn-generate-jub').textContent = '✨ 한글 / IPA 자동 생성'; document.getElementById('edit-modal').classList.add('active');
+            if(e) e.stopPropagation();
+            const jub = (userDB.jubs || []).find(j => String(j.id) === String(id));
+            if(!jub) return;
+            editingJubId = jub.id;
+            document.getElementById('edit-modal-title').innerText = '✏️ 줍줍 문장 수정';
+            document.getElementById('btn-save-jub').innerText = '[수정 완료]';
+            document.getElementById('edit-kor').value = jub.kor;
+            document.getElementById('edit-eng').value = jub.eng;
+            document.getElementById('edit-ipa').value = jub.ipa || '';
+            document.getElementById('edit-ipa').dataset.initialIpa = jub.ipa || '';
+            document.getElementById('existing-jubs-list').innerHTML = '';
+            document.getElementById('jub-generation-status').textContent = '한글 번역은 외부 번역 서비스에 영어 문장이 전송됩니다.';
+            document.getElementById('btn-generate-jub').textContent = '✨ 한글 / IPA 자동 생성';
+            document.getElementById('edit-modal').classList.add('active');
         }
 
-        function markJubGeneratedStale() {
+                function markJubGeneratedStale() {
             const status = document.getElementById('jub-generation-status');
             if (status) status.textContent = '영어 문장을 수정했다면 다시 자동 생성해 주세요.';
         }
@@ -2280,7 +2367,7 @@ function nextCard(e) {
                 const ipa = await getCambridgeUSIPA(eng);
                 document.getElementById('edit-ipa').value = ipa;
                 document.getElementById('edit-ipa').dataset.initialIpa = ipa;
-                ipaOK = !!ipa;
+                ipaOK = !!ipa && getMissingIPAWords(eng).length === 0;
                 // MyMemory 무료 공개 서비스에 문장이 전송되므로 비공개 정보 입력은 피하도록 안내.
                 const url = 'https://api.mymemory.translated.net/get?langpair=en|ko&q=' + encodeURIComponent(eng);
                 const response = await fetch(url, {signal:AbortSignal.timeout(10000)});
@@ -2293,11 +2380,20 @@ function nextCard(e) {
                 translated = true;
             } catch (err) { console.warn('한글/IPA 자동 생성:', err); }
             finally {
-                status.textContent = (translated ? '✅ 한글 생성' : '⚠️ 한글 번역 실패 · 직접 입력해 주세요') + ' / ' + (ipaOK ? '✅ IPA 생성' : '⚠️ IPA 미확인 · 직접 입력해 주세요');
+                status.textContent = (translated ? '✅ 한글 생성' : '⚠️ 한글 번역 실패 · 직접 입력해 주세요') + ' / ' + (ipaOK ? '✅ IPA 생성' : '⚠️ 일부 미등록 단어는 영어 철자로 표시 · 확인 후 직접 수정 가능');
                 btn.disabled = false; btn.textContent = '✨ 한글 / IPA 다시 생성';
             }
         }
-        function closeEditModal() { document.getElementById('edit-modal').classList.remove('active'); ueChoicePending = false; }
+        function closeEditModal() {
+            if (returnToJubCreation && editingJubId !== null) {
+                // 이전 줍줍 수정 중 취소하면 원래 추가 화면으로 돌아감.
+                openEditModal();
+                return;
+            }
+            returnToJubCreation = false;
+            document.getElementById('edit-modal').classList.remove('active');
+            ueChoicePending = false;
+        }
 
         // CMU Pronouncing Dictionary (미국식 단어 발음 기반, 다의어·연음은 문맥 검토 필요)
         // 미국식 발음사전은 ipa-dictionary.js 에서 로드합니다.
@@ -2309,47 +2405,79 @@ function nextCard(e) {
             const newEng = document.getElementById('edit-eng').value.replace(/\s+/g, ' ').trim();
             const ipaInput = document.getElementById('edit-ipa');
             const typedIpa = ipaInput.value.trim();
-            const manualIpa = !!typedIpa;
+            const ipaWasEdited = typedIpa !== (ipaInput.dataset.initialIpa || '');
             if (!newKor || !newEng) { alert('한글과 영어를 모두 입력해주세요.'); return; }
-            const btn = document.getElementById('btn-save-jub'), oldText = btn.innerText;
-            btn.disabled = true; btn.innerText = '발음기호 확인 중...';
-            let missingIpa = false;
+            const btn = document.getElementById('btn-save-jub');
+            const oldText = btn.innerText;
+            btn.disabled = true;
+            btn.innerText = '발음기호 확인 중...';
             try {
-                if (editingJubId) {
-                    const jub = userDB.jubs.find(j => j.id === editingJubId);
+                if (editingJubId !== null) {
+                    const jub = (userDB.jubs || []).find(j => String(j.id) === String(editingJubId));
                     if (!jub) return;
-                    const changed = jub.eng.replace(/\s+/g, ' ').trim() !== newEng;
-                    const ipa = manualIpa ? typedIpa : (changed ? await getCambridgeUSIPA(newEng) : typedIpa || jub.ipa || '');
-                    missingIpa = !ipa;
+                    const changed = String(jub.eng || '').replace(/\s+/g, ' ').trim() !== newEng;
+                    // 영어가 바뀌고 IPA를 직접 수정하지 않았다면 이전 문장의 IPA를 재사용하지 않음.
+                    const ipa = ipaWasEdited ? typedIpa : (changed ? await getCambridgeUSIPA(newEng) : typedIpa);
                     jub.kor = newKor; jub.eng = newEng; jub.ipa = ipa;
                     if (changed) {
                         if (!jub.section.includes('(변형)')) jub.section += ' (변형)';
                         jub.audio = ''; jub.start = 0; jub.end = 0;
                     }
                     const list = globalTempLists[currentListIdx] || [];
-                    const temp = list.find(c => c.jubId === editingJubId);
-                    if (temp) Object.assign(temp, { kor:newKor, eng:newEng, ipa, badge:jub.section, audio:jub.audio, start:jub.start, end:jub.end });
-                    saveDB(); closeEditModal(); renderListItems(); renderBasketTable();
+                    const temp = list.find(c => String(c.jubId) === String(editingJubId));
+                    if (temp) Object.assign(temp, {kor:newKor,eng:newEng,ipa,badge:jub.section,audio:jub.audio,start:jub.start,end:jub.end});
+                    saveDB();
+                    if (returnToJubCreation) {
+                        // 이전 줍줍 편집 완료 → 원래 변형 추가 화면으로 복귀.
+                        openEditModal();
+                    } else {
+                        document.getElementById('edit-modal').classList.remove('active');
+                        returnToJubCreation = false;
+                        if (document.getElementById('basket-list-container')?.style.display === 'block') renderListItems();
+                        else renderBasketTable();
+                    }
+                    if (getMissingIPAWords(newEng).length && !ipaWasEdited) {
+                        alert('사전에 없는 단어는 영어 철자로 남겨뒀어요. 필요하면 IPA를 직접 수정해 주세요.');
+                    }
                 } else {
                     const card = currentDeck[currentCardIndex];
-                    const original = card.originalEng.replace(/\s+/g, ' ').trim();
+                    if (!card) return;
+                    const original = String(card.originalEng || card.eng).replace(/\s+/g, ' ').trim();
                     const changed = original !== newEng;
-                    const ipa = manualIpa ? typedIpa : (changed ? await getCambridgeUSIPA(newEng) : card.ipa || '');
-                    missingIpa = !ipa;
-                    userDB.jubs.push({ id:Date.now().toString(), ch:currentChStr, baseType:card.baseType || 'Unknown',
+                    const ipa = ipaWasEdited ? typedIpa : (changed ? await getCambridgeUSIPA(newEng) : (typedIpa || card.ipa || ''));
+                    // 기존 jubs 항목 구조 유지. 미션/성취도/녹음 데이터는 변경하지 않음.
+                    const existingIds = new Set((userDB.jubs || []).map(j => String(j.id)));
+                    let newId = String(Date.now());
+                    while (existingIds.has(newId)) newId = String(Number(newId) + 1);
+                    userDB.jubs.push({id:newId, ch:card.ch, baseType:card.baseType || 'Unknown',
                         section:card.badge + (changed ? ' (변형)' : ''), kor:newKor, eng:newEng, ipa,
                         audio:changed ? '' : card.audio || '', start:changed ? 0 : card.start || 0,
-                        end:changed ? 0 : card.end || 0, originalEng:original });
+                        end:changed ? 0 : card.end || 0, originalEng:original});
                     const goNext = ueChoicePending;
-                    saveDB(); closeEditModal(); updateJubButtonState();
-                    if (goNext) advanceToNextCard();
+                    saveDB();
+                    updateJubButtonState();
+                    // 여러 줍줍을 저장해도 이전 항목은 지우지 않음. 다음 카드 이동은 마지막 저장 뒤.
+                    const addMore = confirm('줍줍 문장을 하나 더 추가할까요?\n확인: 다른 문장 추가 / 취소: 저장 후 계속');
+                    if (addMore) {
+                        openEditModal();
+                    } else {
+                        document.getElementById('edit-modal').classList.remove('active');
+                        ueChoicePending = false;
+                        returnToJubCreation = false;
+                        if (goNext) advanceToNextCard();
+                    }
+                    if (getMissingIPAWords(newEng).length && !ipaWasEdited) {
+                        // 사전 누락은 이미 문장 저장되었고 나머지 IPA는 유지됨.
+                        diag('부분 IPA', getMissingIPAWords(newEng).join(', '));
+                    }
                 }
-                if (missingIpa) alert('문장은 저장했지만 발음사전에서 확인되지 않는 단어가 있어 IPA는 비워뒀어요. 필요하면 직접 입력해 주세요.');
-            } catch (err) { console.error('줍줍 저장 오류:', err); alert('저장 중 오류가 발생했습니다. 다시 시도해 주세요.'); }
-            finally { btn.innerText = oldText; btn.disabled = false; }
+            } catch (err) {
+                console.error('줍줍 저장 오류:', err);
+                alert('저장 중 오류가 발생했습니다. 다시 시도해 주세요.');
+            } finally { btn.innerText = oldText; btn.disabled = false; }
         }
 
-        // 💡 CMU 미국식 단어 발음 사전 기반. 미등록 단어가 있으면 잘못된 IPA 대신 빈칸 반환.
+                // 💡 CMU 미국식 단어 발음 사전 기반. 미등록 단어가 있으면 잘못된 IPA 대신 빈칸 반환.
         let ipaDictionaryPromise = null;
         function ensureIPADictionary() {
             if (typeof CMU_US_IPA !== 'undefined') return Promise.resolve();
@@ -2365,17 +2493,26 @@ function nextCard(e) {
             return ipaDictionaryPromise;
         }
 
+        // 문장 내 인식 가능한 단어만 IPA로 치환하고 미등록 단어는 그대로 보존.
+        // 예) "I moved to Sejong" → "/aɪ muvd tu Sejong/" (사전 내용에 따라 달라짐)
+        function tokenizeForMixedIPA(sentence) {
+    return String(sentence || '').match(
+        /[\p{L}\p{M}]+(?:['’][\p{L}\p{M}]+)*|\d+(?:[.,]\d+)*/gu
+    ) || [];
+}
+        function getMissingIPAWords(sentence) {
+            if (typeof CMU_US_IPA === 'undefined') return [];
+            return tokenizeForMixedIPA(sentence).filter(word => !CMU_US_IPA[word.toLowerCase().replace(/’/g,"'")]);
+        }
         async function getCambridgeUSIPA(sentence) {
             await ensureIPADictionary();
-            if (/[\u3131-\uD79D]/.test(sentence) || /\d/.test(sentence)) return '';
-            const words = (sentence.toLowerCase().match(/[a-z]+(?:['’][a-z]+)*/g) || []).map(w => w.replace('’', "'"));
+            const words = tokenizeForMixedIPA(sentence);
             if (!words.length) return '';
-            const pronunciations = words.map(word => CMU_US_IPA[word]);
-            if (pronunciations.some(p => !p)) return '';
-            return '/' + pronunciations.join(' ') + '/';
+            const mixed = words.map(word => CMU_US_IPA[word.toLowerCase().replace(/’/g,"'")] || word);
+            return '/' + mixed.join(' ') + '/';
         }
 
-        function removeJubById(id, e) {
+                function removeJubById(id, e) {
             if(e) e.stopPropagation();
             if(confirm("이 문장을 삭제할까요?")) {
                 let idx = userDB.jubs.findIndex(j => j.id === id);
