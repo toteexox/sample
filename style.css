@@ -576,3 +576,68 @@ body.admin-page-mode .nav-tabs { visibility:hidden; pointer-events:none; }
 .mission-day-switch { flex-shrink:0; white-space:nowrap; border:0; border-radius:11px; background:#e8f6ff; color:#1267ac; font-size:14px; font-weight:800; padding:8px 12px; cursor:pointer; -webkit-tap-highlight-color:transparent; }
 .mission-day-switch:active { background:#cfeaff; }
 @media (max-width:390px) { .mission-section-header h2 { font-size:18px; } .mission-day-switch { font-size:13px; padding:7px 10px; } }
+
+
+
+
+/* ===== Stack Up M9: 전체 12챕터 통계표 / 챕터 구분 / 총합계 강조 ===== */
+/* 과거 M7 챕터 선택 버튼은 M9의 JS에서 생성하지 않음. 남은 요소도 숨김 */
+#view-learn .chapter-selector,
+#view-basket .chapter-selector { display: none !important; }
+
+/* 챕터 단위 구획: 시작 행의 굵은 상단선과 CH 셀의 연한 파란 배경 */
+#view-learn .stats-table tr.chapter-start-row > td,
+#view-basket .stats-table tr.chapter-start-row > td {
+  border-top: 3px solid #b6cef3;
+}
+#view-learn .stats-table td.chapter-group-cell,
+#view-basket .stats-table td.chapter-group-cell {
+  background: #f2f7ff !important;
+  color: #254a7a !important;
+  border-right: 2px solid #c4d8f4;
+  vertical-align: middle;
+  font-weight: 900 !important;
+  letter-spacing: .02em;
+}
+#view-learn .stats-table td.chapter-part-label,
+#view-basket .stats-table td.chapter-part-label {
+  color: #344154 !important;
+  font-weight: 750 !important;
+  white-space: nowrap;
+}
+
+/* 총합계는 한 셀만 아니라 해당 행 전체에 배경색 표시 */
+#view-learn .stats-table tr.chapter-total-row > td,
+#view-basket .stats-table tr.chapter-total-row > td {
+  background: #e8f1ff !important;
+  border-top: 2px solid #9fc1f4;
+  border-bottom: 2px solid #b6cef3;
+  font-weight: 850 !important;
+}
+#view-learn .stats-table tr.chapter-total-row td.chapter-part-label,
+#view-basket .stats-table tr.chapter-total-row td.chapter-part-label {
+  color: #145da8 !important;
+}
+#view-learn .stats-table tr.chapter-part-row:nth-child(even) > td,
+#view-basket .stats-table tr.chapter-part-row:nth-child(even) > td {
+  background-color: #fbfcff;
+}
+#view-learn .stats-table td.clickable,
+#view-basket .stats-table td.clickable {
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+@media (max-width: 767px) {
+  #view-learn .stats-table-wrapper,
+  #view-basket .stats-table-wrapper { overflow-x: auto; }
+  #view-learn .stats-table,
+  #view-basket .stats-table { font-size: 13px; }
+  #view-learn .stats-table th,
+  #view-learn .stats-table td,
+  #view-basket .stats-table th,
+  #view-basket .stats-table td { padding: 12px 3px; }
+  #view-learn .stats-table td.chapter-part-label,
+  #view-basket .stats-table td.chapter-part-label { font-size: 12.5px; }
+}
+/* ===== M9 끝 ===== */
